@@ -3,6 +3,7 @@ package push
 import (
 	"encoding/json"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -113,5 +114,35 @@ func TestPushQueue_MatchTarget_User(t *testing.T) {
 	conns := q.matchTarget("news:admin:u1")
 	if len(conns) != 1 {
 		t.Errorf("matchTarget(news:admin:u1) returned %d connections, want 1", len(conns))
+	}
+}
+
+func TestPushQueue_NoDuplicatePush(t *testing.T) {
+	reg := registry.New(4)
+	q := New(reg, 100, 2)
+	q.Start()
+
+	conn := newTestConnection("news", "admin", "u1")
+	reg.Register(conn)
+
+	task := PushTask{
+		Targets: []string{"news:*", "news:admin:*", "news:admin:u1"},
+		Message: json.RawMessage(`{"type":"test"}`),
+	}
+
+	q.process(task)
+
+	recorder := conn.Conn.(*httptest.ResponseRecorder)
+	body := recorder.Body.String()
+
+	count := 0
+	for _, line := range strings.Split(body, "\n") {
+		if strings.HasPrefix(line, "data:") {
+			count++
+		}
+	}
+
+	if count != 1 {
+		t.Errorf("expected 1 message delivery, got %d; body:\n%s", count, body)
 	}
 }
