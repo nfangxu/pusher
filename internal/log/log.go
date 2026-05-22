@@ -103,3 +103,11 @@ func Infow(msg string, keysAndValues ...interface{}) {
 func Errorw(msg string, keysAndValues ...interface{}) {
 	sugar.Errorw(msg, keysAndValues...)
 }
+
+func Fatal(args ...interface{}) {
+	sugar.Fatal(args...)
+}
+
+func Fatalf(template string, args ...interface{}) {
+	sugar.Fatalf(template, args...)
+}
