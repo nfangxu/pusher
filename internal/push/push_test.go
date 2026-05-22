@@ -83,6 +83,11 @@ func TestPushQueue_MatchTarget_Channel(t *testing.T) {
 	if len(conns) != 2 {
 		t.Errorf("matchTarget(news:*:*) returned %d connections, want 2", len(conns))
 	}
+
+	conns = q.matchTarget("news:*")
+	if len(conns) != 2 {
+		t.Errorf("matchTarget(news:*) returned %d connections, want 2", len(conns))
+	}
 }
 
 func TestPushQueue_MatchTarget_Group(t *testing.T) {

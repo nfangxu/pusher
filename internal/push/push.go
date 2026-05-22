@@ -81,28 +81,37 @@ func (q *PushQueue) matchTarget(target string) []*registry.Connection {
 	}
 
 	parts := strings.Split(target, ":")
-	if len(parts) != 3 {
+
+	switch len(parts) {
+	case 2:
+		// {channel}:*
+		channel := parts[0]
+		if parts[1] == "*" {
+			return q.registry.GetByChannel(channel)
+		}
+		return nil
+	case 3:
+		channel := parts[0]
+		group := parts[1]
+		uuid := parts[2]
+
+		if group == "*" && uuid == "*" {
+			return q.registry.GetByChannel(channel)
+		}
+
+		if uuid == "*" {
+			return q.registry.GetByGroup(channel, group)
+		}
+
+		userKey := channel + ":" + group + ":" + uuid
+		conn := q.registry.GetByUser(userKey)
+		if conn == nil {
+			return nil
+		}
+		return []*registry.Connection{conn}
+	default:
 		return nil
 	}
-
-	channel := parts[0]
-	group := parts[1]
-	uuid := parts[2]
-
-	if group == "*" && uuid == "*" {
-		return q.registry.GetByChannel(channel)
-	}
-
-	if uuid == "*" {
-		return q.registry.GetByGroup(channel, group)
-	}
-
-	userKey := channel + ":" + group + ":" + uuid
-	conn := q.registry.GetByUser(userKey)
-	if conn == nil {
-		return nil
-	}
-	return []*registry.Connection{conn}
 }
 
 func (q *PushQueue) send(conn *registry.Connection, message json.RawMessage) {
