@@ -47,7 +47,7 @@ func main() {
 	r.Use(corsMiddleware(cfg.SSE.CORSOrigins))
 
 	r.GET("/sse/connect", sseHandler.Connect)
-	r.POST("/push", pushHandler.Push)
+	r.POST("/push", handler.RateLimitMiddleware(cfg.Push.RateLimit), pushHandler.Push)
 	r.GET("/health", healthHandler.Health)
 
 	addr := fmt.Sprintf("%s:%d", cfg.App.Host, cfg.App.Port)

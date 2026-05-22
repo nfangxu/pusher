@@ -12,10 +12,10 @@ import (
 )
 
 type SSEHandler struct {
-	registry *registry.Registry
-	validator *token.Validator
+	registry          *registry.Registry
+	validator         *token.Validator
 	heartbeatInterval int
-	readTimeout int
+	readTimeout       int
 }
 
 func NewSSEHandler(reg *registry.Registry, v *token.Validator, heartbeatInterval, readTimeout int) *SSEHandler {
@@ -36,8 +36,18 @@ func (h *SSEHandler) Connect(c *gin.Context) {
 
 	claims, err := h.validator.Validate(tokenStr)
 	if err != nil {
-		log.Errorw("Token校验失败", "error", err.Error(), "token", tokenStr[:min(8, len(tokenStr))])
-		abortWithError(c, 1001, "invalid token")
+		tokenPreview := tokenStr
+		if len(tokenStr) > 8 {
+			tokenPreview = tokenStr[:8]
+		}
+		log.Errorw("Token校验失败", "error", err.Error(), "token", tokenPreview)
+
+		switch err {
+		case token.ErrTokenExpired:
+			abortWithError(c, 1004, "token expired")
+		default:
+			abortWithError(c, 1001, "invalid token")
+		}
 		return
 	}
 
@@ -127,11 +137,4 @@ func (h *SSEHandler) disconnect(conn *registry.Connection) {
 		"uuid", conn.UUID,
 		"duration", fmt.Sprintf("%.0fs", duration.Seconds()),
 	)
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

@@ -10,6 +10,15 @@ import (
 	"time"
 )
 
+var (
+	ErrTokenExpired       = fmt.Errorf("token expired")
+	ErrInvalidSignature   = fmt.Errorf("invalid signature")
+	ErrMissingFields      = fmt.Errorf("missing required fields")
+	ErrInvalidBase64      = fmt.Errorf("invalid base64")
+	ErrInvalidQueryFormat = fmt.Errorf("invalid query format")
+	ErrInvalidTimestamp   = fmt.Errorf("invalid timestamp")
+)
+
 type Claims struct {
 	Channel string
 	Group   string
@@ -40,12 +49,12 @@ func Generate(salt string, channel, group, uuid string) string {
 func (v *Validator) Validate(token string) (*Claims, error) {
 	data, err := base64.StdEncoding.DecodeString(token)
 	if err != nil {
-		return nil, fmt.Errorf("invalid base64: %w", err)
+		return nil, ErrInvalidBase64
 	}
 
 	params, err := url.ParseQuery(string(data))
 	if err != nil {
-		return nil, fmt.Errorf("invalid query format: %w", err)
+		return nil, ErrInvalidQueryFormat
 	}
 
 	channel := params.Get("channel")
@@ -55,22 +64,22 @@ func (v *Validator) Validate(token string) (*Claims, error) {
 	sign := params.Get("sign")
 
 	if channel == "" || group == "" || uuid == "" || tsStr == "" || sign == "" {
-		return nil, fmt.Errorf("missing required fields")
+		return nil, ErrMissingFields
 	}
 
 	ts, err := strconv.ParseInt(tsStr, 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("invalid timestamp: %w", err)
+		return nil, ErrInvalidTimestamp
 	}
 
 	now := time.Now().Unix()
 	if now-ts > v.expireSeconds {
-		return nil, fmt.Errorf("token expired")
+		return nil, ErrTokenExpired
 	}
 
 	expectedSign := calcSign(channel, group, uuid, ts, v.salt)
 	if sign != expectedSign {
-		return nil, fmt.Errorf("invalid signature")
+		return nil, ErrInvalidSignature
 	}
 
 	return &Claims{
