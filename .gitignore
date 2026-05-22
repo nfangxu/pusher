@@ -1,5 +1,7 @@
 # Binaries
 server
+stress
+!cmd/stress/
 *.exe
 *.exe~
 *.dll
