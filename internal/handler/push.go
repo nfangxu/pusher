@@ -20,6 +20,11 @@ func NewPushHandler(queue *push.PushQueue, token string) *PushHandler {
 	}
 }
 
+type PushRequest struct {
+	Targets []string        `json:"targets" binding:"required"`
+	Message json.RawMessage `json:"message" binding:"required"`
+}
+
 func (h *PushHandler) Push(c *gin.Context) {
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" || authHeader != "Bearer "+h.token {
@@ -27,11 +32,7 @@ func (h *PushHandler) Push(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		Targets []string       `json:"targets" binding:"required"`
-		Message interface{}    `json:"message" binding:"required"`
-	}
-
+	var req PushRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		abortWithError(c, 1002, "invalid request body")
 		return
@@ -42,15 +43,14 @@ func (h *PushHandler) Push(c *gin.Context) {
 		return
 	}
 
-	message, err := json.Marshal(req.Message)
-	if err != nil {
-		abortWithError(c, 1002, "invalid message format")
+	if len(req.Message) == 0 {
+		abortWithError(c, 1002, "message is required")
 		return
 	}
 
 	task := push.PushTask{
 		Targets: req.Targets,
-		Message: message,
+		Message: req.Message,
 	}
 
 	if err := h.queue.Push(task); err != nil {
