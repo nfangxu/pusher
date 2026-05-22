@@ -58,7 +58,7 @@
 
 ### 环境要求
 
-- Go 1.21+
+- Go 1.26.3+
 
 ### 编译运行
 
@@ -159,7 +159,7 @@ cd /opt/pusher
 创建 `Dockerfile`：
 
 ```dockerfile
-FROM golang:1.21-alpine AS builder
+FROM golang:1.26-alpine AS builder
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
@@ -379,107 +379,136 @@ curl -X POST http://your-push-server:8080/push \
 package main
 
 import (
-    "bytes"
-    "encoding/json"
-    "net/http"
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"time"
 )
 
 type PushRequest struct {
-    Targets []string    `json:"targets"`
-    Message interface{} `json:"message"`
+	Targets []string    `json:"targets"`
+	Message interface{} `json:"message"`
 }
 
-func Push(serverURL, pushToken string, targets []string, message interface{}) error {
-    req := PushRequest{
-        Targets: targets,
-        Message: message,
-    }
-    body, _ := json.Marshal(req)
-
-    httpReq, _ := http.NewRequest("POST", serverURL+"/push", bytes.NewReader(body))
-    httpReq.Header.Set("Content-Type", "application/json")
-    httpReq.Header.Set("Authorization", "Bearer "+pushToken)
-
-    resp, err := http.DefaultClient.Do(httpReq)
-    if err != nil {
-        return err
-    }
-    defer resp.Body.Close()
-    return nil
+type PushResponse struct {
+	Code int    `json:"code"`
+	Msg  string `json:"msg"`
 }
 
-// 使用示例
+// Push 向推送服务发送消息
+func Push(ctx context.Context, serverURL, pushToken string, targets []string, message interface{}) (*PushResponse, error) {
+	reqBody, err := json.Marshal(PushRequest{
+		Targets: targets,
+		Message: message,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", serverURL+"/push", bytes.NewReader(reqBody))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+pushToken)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("do request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var result PushResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	return &result, nil
+}
+
 func main() {
-    Push("http://localhost:8080", "your-push-token-here",
-        []string{"news:admin:u1"},
-        map[string]interface{}{"type": "alert", "content": "hello"},
-    )
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	resp, err := Push(ctx, "http://localhost:8080", "your-push-token-here",
+		[]string{"news:admin:u1"},
+		map[string]interface{}{"type": "alert", "content": "hello"},
+	)
+	if err != nil {
+		fmt.Printf("推送失败: %v\n", err)
+		return
+	}
+	if resp.Code != 0 {
+		fmt.Printf("推送错误: code=%d msg=%s\n", resp.Code, resp.Msg)
+		return
+	}
+	fmt.Println("推送成功")
 }
 ```
 
-#### Python
+#### PHP
 
-```python
-import requests
+```php
+<?php
 
-def push(server_url, push_token, targets, message):
-    resp = requests.post(
-        f"{server_url}/push",
-        headers={
-            "Authorization": f"Bearer {push_token}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "targets": targets,
-            "message": message,
-        },
-    )
-    return resp.json()
+/**
+ * 向推送服务发送消息
+ *
+ * @param string $serverUrl   推送服务地址，如 http://localhost:8080
+ * @param string $pushToken   推送接口认证 Token
+ * @param array  $targets     推送目标，如 ["news:*", "news:admin:u1"]
+ * @param array  $message     消息体，任意可 JSON 编码的数据
+ * @return array 响应数组，包含 code 和 msg 字段
+ * @throws RuntimeException 请求失败时抛出异常
+ */
+function push(string $serverUrl, string $pushToken, array $targets, array $message): array
+{
+    $body = json_encode([
+        'targets' => $targets,
+        'message' => $message,
+    ], JSON_UNESCAPED_UNICODE);
 
-# 使用示例
-push("http://localhost:8080", "your-push-token-here",
-     targets=["news:*"],
-     message={"type": "alert", "content": "全局通知"})
-```
+    $ch = curl_init($serverUrl . '/push');
+    curl_setopt_array($ch, [
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => $body,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 5,
+        CURLOPT_HTTPHEADER     => [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . $pushToken,
+        ],
+    ]);
 
-#### Java
-
-```java
-import java.net.http.*;
-import java.net.URI;
-
-public class PusherClient {
-    private final String serverUrl;
-    private final String pushToken;
-    private final HttpClient client = HttpClient.newHttpClient();
-
-    public PusherClient(String serverUrl, String pushToken) {
-        this.serverUrl = serverUrl;
-        this.pushToken = pushToken;
+    $response = curl_exec($ch);
+    if (curl_errno($ch)) {
+        $error = curl_error($ch);
+        curl_close($ch);
+        throw new RuntimeException("推送请求失败: {$error}");
     }
+    curl_close($ch);
 
-    public void push(String[] targets, String messageJson) throws Exception {
-        String body = String.format("{\"targets\":%s,\"message\":%s}",
-            toJsonArray(targets), messageJson);
+    return json_decode($response, true);
+}
 
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(serverUrl + "/push"))
-            .header("Authorization", "Bearer " + pushToken)
-            .header("Content-Type", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
+// --- 使用示例 ---
 
-        client.send(request, HttpResponse.BodyHandlers.ofString());
+try {
+    $result = push(
+        'http://localhost:8080',
+        'your-push-token-here',
+        ['news:admin:u1'],
+        ['type' => 'alert', 'content' => 'hello']
+    );
+
+    if ($result['code'] === 0) {
+        echo "推送成功\n";
+    } else {
+        echo "推送错误: code={$result['code']} msg={$result['msg']}\n";
     }
-
-    private String toJsonArray(String[] arr) {
-        StringBuilder sb = new StringBuilder("[");
-        for (int i = 0; i < arr.length; i++) {
-            if (i > 0) sb.append(",");
-            sb.append("\"").append(arr[i]).append("\"");
-        }
-        return sb.append("]").toString();
-    }
+} catch (RuntimeException $e) {
+    echo $e->getMessage() . "\n";
 }
 ```
 
@@ -573,76 +602,59 @@ Token:    base64("channel=news&group=admin&uuid=u1&ts=1747830600&sign=a1b2c3d4e5
 #### Go
 
 ```go
+package main
+
 import (
-    "crypto/md5"
-    "encoding/base64"
-    "fmt"
-    "time"
+	"crypto/md5"
+	"encoding/base64"
+	"fmt"
+	"time"
 )
 
+// GenerateToken 生成 SSE 连接用的 Token
+// salt: 签名盐值，需与服务端 config.yaml 中 token.salt 一致
+// channel, group, uuid: 用户标识三元组
 func GenerateToken(salt, channel, group, uuid string) string {
-    ts := time.Now().Unix()
-    signInput := fmt.Sprintf("%s%s%s%d%s", channel, group, uuid, ts, salt)
-    sign := fmt.Sprintf("%x", md5.Sum([]byte(signInput)))
-    token := fmt.Sprintf("channel=%s&group=%s&uuid=%s&ts=%d&sign=%s", channel, group, uuid, ts, sign)
-    return base64.StdEncoding.EncodeToString([]byte(token))
+	ts := time.Now().Unix()
+	signInput := fmt.Sprintf("%s%s%s%d%s", channel, group, uuid, ts, salt)
+	sign := fmt.Sprintf("%x", md5.Sum([]byte(signInput)))
+	token := fmt.Sprintf("channel=%s&group=%s&uuid=%s&ts=%d&sign=%s", channel, group, uuid, ts, sign)
+	return base64.StdEncoding.EncodeToString([]byte(token))
+}
+
+func main() {
+	token := GenerateToken("your-secret-salt-here", "news", "admin", "u1")
+	fmt.Println(token)
 }
 ```
 
-#### Python
+#### PHP
 
-```python
-import hashlib
-import base64
-import time
+```php
+<?php
 
-def generate_token(salt, channel, group, uuid):
-    ts = int(time.time())
-    sign_input = f"{channel}{group}{uuid}{ts}{salt}"
-    sign = hashlib.md5(sign_input.encode()).hexdigest()
-    token = f"channel={channel}&group={group}&uuid={uuid}&ts={ts}&sign={sign}"
-    return base64.b64encode(token.encode()).decode()
-```
-
-#### Java
-
-```java
-import java.security.MessageDigest;
-import java.util.Base64;
-import java.time.Instant;
-
-public class TokenGenerator {
-    public static String generate(String salt, String channel, String group, String uuid) throws Exception {
-        long ts = Instant.now().getEpochSecond();
-        String signInput = channel + group + uuid + ts + salt;
-        String sign = md5(signInput);
-        String token = String.format("channel=%s&group=%s&uuid=%s&ts=%d&sign=%s",
-            channel, group, uuid, ts, sign);
-        return Base64.getEncoder().encodeToString(token.getBytes());
-    }
-
-    private static String md5(String input) throws Exception {
-        MessageDigest md = MessageDigest.getInstance("MD5");
-        byte[] digest = md.digest(input.getBytes());
-        StringBuilder sb = new StringBuilder();
-        for (byte b : digest) sb.append(String.format("%02x", b));
-        return sb.toString();
-    }
+/**
+ * 生成 SSE 连接用的 Token
+ *
+ * @param string $salt    签名盐值，需与服务端 config.yaml 中 token.salt 一致
+ * @param string $channel 业务频道
+ * @param string $group   用户分组
+ * @param string $uuid    用户唯一标识
+ * @return string Base64 编码的 Token
+ */
+function generateToken(string $salt, string $channel, string $group, string $uuid): string
+{
+    $ts = time();
+    $signInput = $channel . $group . $uuid . $ts . $salt;
+    $sign = md5($signInput);
+    $token = "channel={$channel}&group={$group}&uuid={$uuid}&ts={$ts}&sign={$sign}";
+    return base64_encode($token);
 }
-```
 
-#### Node.js
+// --- 使用示例 ---
 
-```javascript
-const crypto = require('crypto');
-
-function generateToken(salt, channel, group, uuid) {
-    const ts = Math.floor(Date.now() / 1000);
-    const signInput = `${channel}${group}${uuid}${ts}${salt}`;
-    const sign = crypto.createHash('md5').update(signInput).digest('hex');
-    const token = `channel=${channel}&group=${group}&uuid=${uuid}&ts=${ts}&sign=${sign}`;
-    return Buffer.from(token).toString('base64');
-}
+$token = generateToken('your-secret-salt-here', 'news', 'admin', 'u1');
+echo $token . "\n";
 ```
 
 ### 注意事项
