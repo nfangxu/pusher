@@ -1,0 +1,38 @@
+# Binaries
+server
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Go workspace
+go.work
+go.work.sum
+
+# Vendor (if using go mod vendor)
+# vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+
+# Config overrides (keep config.yaml as template)
+# config.prod.yaml
+# config.local.yaml
+
+# Claude Code
+.claude/
