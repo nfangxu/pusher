@@ -1,0 +1,24 @@
+app:
+  host: "0.0.0.0"
+  port: 8080
+
+log:
+  level: "info"
+  path: "logs/pusher.log"
+  max_days: 7
+
+sse:
+  heartbeat_interval: 30
+  read_timeout: 60
+  cors_origins: "*"
+  worker_num: 8
+  push_queue_capacity: 10000
+  shard_num: 32
+
+token:
+  salt: "your-secret-salt-here"
+  expire_seconds: 3600
+
+push:
+  token: "your-push-token-here"
+  rate_limit: 100
