@@ -447,13 +447,13 @@ func main() {
 }
 ```
 
-#### PHP
+#### PHP（cURL）
 
 ```php
 <?php
 
 /**
- * 向推送服务发送消息
+ * 向推送服务发送消息（cURL 版本，无需额外依赖）
  *
  * @param string $serverUrl   推送服务地址，如 http://localhost:8080
  * @param string $pushToken   推送接口认证 Token
@@ -509,6 +509,68 @@ try {
     }
 } catch (RuntimeException $e) {
     echo $e->getMessage() . "\n";
+}
+```
+
+#### PHP（Guzzle）
+
+需要先安装 Guzzle：`composer require guzzlehttp/guzzle`
+
+```php
+<?php
+
+require 'vendor/autoload.php';
+
+use GuzzleHttp\Client;
+use GuzzleHttp\Exception\GuzzleException;
+
+/**
+ * 向推送服务发送消息（Guzzle 版本，推荐用于已有 Guzzle 依赖的项目）
+ *
+ * @param string $serverUrl   推送服务地址，如 http://localhost:8080
+ * @param string $pushToken   推送接口认证 Token
+ * @param array  $targets     推送目标，如 ["news:*", "news:admin:u1"]
+ * @param array  $message     消息体，任意可 JSON 编码的数据
+ * @return array 响应数组，包含 code 和 msg 字段
+ * @throws GuzzleException 请求失败时抛出异常
+ */
+function push(string $serverUrl, string $pushToken, array $targets, array $message): array
+{
+    $client = new Client([
+        'base_uri' => $serverUrl,
+        'timeout'  => 5,
+    ]);
+
+    $response = $client->post('/push', [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $pushToken,
+        ],
+        'json' => [
+            'targets' => $targets,
+            'message' => $message,
+        ],
+    ]);
+
+    return json_decode($response->getBody()->getContents(), true);
+}
+
+// --- 使用示例 ---
+
+try {
+    $result = push(
+        'http://localhost:8080',
+        'your-push-token-here',
+        ['news:admin:u1'],
+        ['type' => 'alert', 'content' => 'hello']
+    );
+
+    if ($result['code'] === 0) {
+        echo "推送成功\n";
+    } else {
+        echo "推送错误: code={$result['code']} msg={$result['msg']}\n";
+    }
+} catch (GuzzleException $e) {
+    echo "推送请求失败: " . $e->getMessage() . "\n";
 }
 ```
 
