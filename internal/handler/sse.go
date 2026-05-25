@@ -99,12 +99,14 @@ func (h *SSEHandler) heartbeat(conn *registry.Connection, beat chan<- struct{}) 
 			return
 		case <-ticker.C:
 			ok := h.safeHeartbeat(conn)
-			if !ok {
-				return
-			}
 			select {
 			case beat <- struct{}{}:
 			default:
+			}
+			if !ok {
+				if conn.IsClosed() {
+					return
+				}
 			}
 		}
 	}
@@ -113,14 +115,12 @@ func (h *SSEHandler) heartbeat(conn *registry.Connection, beat chan<- struct{}) 
 func (h *SSEHandler) safeHeartbeat(conn *registry.Connection) (ok bool) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Errorw("心跳 panic，连接可能已断开",
+			log.Warnw("心跳写入失败，连接可能不稳定",
 				"channel", conn.Channel,
 				"group", conn.Group,
 				"uuid", conn.UUID,
 				"recover", fmt.Sprintf("%v", r),
 			)
-			conn.Close()
-			h.registry.Unregister(conn.UserKey)
 			ok = false
 		}
 	}()

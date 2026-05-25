@@ -40,7 +40,37 @@ data: {"channel":"news","group":"admin","uuid":"u1","message":{...}}
 
 ---
 
-## 2. 推送消息
+## 2. WebSocket 连接
+
+建立 WebSocket 连接，功能与 SSE 等价，消息格式为纯 JSON（无 SSE 帧包装）。
+
+```
+GET /ws/connect?token={token}
+```
+
+**参数：**
+
+| 参数 | 位置 | 必填 | 说明 |
+|------|------|------|------|
+| `token` | query | 是 | 身份验证 Token（与 SSE 相同） |
+
+**成功响应：**
+
+协议升级为 WebSocket，服务端推送纯 JSON 消息：
+
+```json
+{"channel":"news","group":"admin","uuid":"u1","message":{...}}
+```
+
+服务端每 30 秒发送 WebSocket Ping 保持连接。
+
+**失败响应：**
+
+与 SSE 相同（1001 / 1004）。
+
+---
+
+## 3. 推送消息
 
 向指定目标推送消息。
 
@@ -82,7 +112,7 @@ Content-Type: application/json
 
 ---
 
-## 3. 健康检查
+## 4. 健康检查
 
 检查服务运行状态。
 
@@ -108,10 +138,10 @@ GET /health
 | 错误码 | 含义 | 触发场景 |
 |--------|------|----------|
 | `0` | 成功 | 推送成功 |
-| `1001` | Token 无效 | SSE 连接时 Token 格式错误或签名校验失败 |
+| `1001` | Token 无效 | SSE/WS 连接时 Token 格式错误或签名校验失败 |
 | `1002` | 请求解析失败 | 推送请求体格式错误或 message 为空 |
 | `1003` | Targets 为空 | 推送请求中 targets 数组为空 |
-| `1004` | Token 已过期 | SSE 连接时 Token 超过有效期 |
+| `1004` | Token 已过期 | SSE/WS 连接时 Token 超过有效期 |
 | `2002` | 推送队列满 | 推送队列容量不足，稍后重试 |
 | `2003` | 请求频率超限 | 推送接口触发限流 |
 | `3001` | 未授权 | 推送接口 Authorization 头缺失或错误 |
@@ -149,7 +179,7 @@ GET /health
 ### 如何监控服务状态？
 
 - 健康检查接口：`GET /health` 返回当前连接数、分组数、频道数
-- 日志监控：解析 JSON 日志中的 `msg` 字段，关注 `SSE连接建立`、`SSE连接断开`、`推送失败` 等关键事件
+- 日志监控：解析 JSON 日志中的 `msg` 字段，关注 `SSE连接建立`、`WebSocket连接建立`、连接断开、`推送失败` 等关键事件
 - 建议接入 Prometheus + Grafana 做更完善的监控
 
 ### 支持多实例部署吗？

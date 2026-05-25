@@ -132,6 +132,12 @@ func (h *WsHandler) Connect(c *gin.Context) {
 		"client_ip", c.ClientIP(),
 	)
 
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		return nil
+	})
+	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+
 	go h.readPump(wsConn, connection)
 	go h.writePump(wsConn)
 }
@@ -167,9 +173,12 @@ func (h *WsHandler) writePump(wsConn *WsConn) {
 			return
 		case <-ticker.C:
 			wsConn.writeMu.Lock()
-			err := wsConn.conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(5*time.Second))
+			err := wsConn.conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(10*time.Second))
 			wsConn.writeMu.Unlock()
 			if err != nil {
+				log.Warnw("WebSocket ping 失败，连接可能已断开",
+					"error", err.Error(),
+				)
 				wsConn.Close()
 				return
 			}

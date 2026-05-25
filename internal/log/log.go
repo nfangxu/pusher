@@ -100,6 +100,10 @@ func Infow(msg string, keysAndValues ...interface{}) {
 	sugar.Infow(msg, keysAndValues...)
 }
 
+func Warnw(msg string, keysAndValues ...interface{}) {
+	sugar.Warnw(msg, keysAndValues...)
+}
+
 func Errorw(msg string, keysAndValues ...interface{}) {
 	sugar.Errorw(msg, keysAndValues...)
 }

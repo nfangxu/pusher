@@ -1,5 +1,5 @@
 @host = http://localhost:8080
-@token = your-push-token-here
+@token = dev-push-token-change-before-production
 
 ### Health Check
 GET {{host}}/health

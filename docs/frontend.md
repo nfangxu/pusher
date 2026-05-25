@@ -20,11 +20,13 @@ open examples/html/ws.html
 
 ## 基本连接
 
-前端通过 `EventSource` API 连接推送服务。连接前需要从后端获取 Token。
+前端可通过 `EventSource` 连接 SSE，或通过 `WebSocket` 连接 WebSocket。两种连接使用相同 Token，推送请求也共用同一套 `/push` 接口。
+
+### SSE 连接
 
 ```javascript
 // 1. 从你的后端获取 Token（后端调用 token 生成逻辑）
-const token = await fetch('/api/sse-token').then(r => r.text());
+const token = await fetch('/api/push-token').then(r => r.text());
 
 // 2. 建立 SSE 连接
 const es = new EventSource(`http://your-push-server:8080/sse/connect?token=${token}`);
@@ -86,7 +88,7 @@ WebSocket 是 SSE 的替代方案，连接方式类似：
 
 ```javascript
 // 1. 从你的后端获取 Token
-const token = await fetch('/api/sse-token').then(r => r.text());
+const token = await fetch('/api/push-token').then(r => r.text());
 
 // 2. 建立 WebSocket 连接
 const ws = new WebSocket(`ws://your-push-server:8080/ws/connect?token=${token}`);
@@ -115,8 +117,8 @@ ws.onclose = () => {
 
 | 特性 | SSE | WebSocket |
 |------|-----|-----------|
-| 协议 | HTTP/1.1 | TCP |
-| 单向/双向 | 单向（服务端推） | 双向 |
+| 协议 | HTTP/1.1 长连接 | WebSocket 升级连接 |
+| 当前服务用途 | 单向服务端推送 | 单向服务端推送（客户端消息会被读取后忽略） |
 | 自动重连 | 内置 | 需自行实现 |
 | 浏览器支持 | 几乎全部 | 几乎全部 |
 | 数据格式 | SSE 帧包裹 | 原始 JSON |
@@ -171,7 +173,7 @@ connect();
 
 ## 多标签页处理
 
-浏览器每个标签页会建立独立的 SSE 连接。同一用户在多个标签页连接时，服务端会保留最新连接，断开旧连接。如果你的业务需要协调多标签页，建议在前端使用 `BroadcastChannel` 或 `SharedWorker`。
+浏览器每个标签页会建立独立的 SSE 或 WebSocket 连接。同一用户在多个标签页连接时，服务端会保留最新连接，断开旧连接。如果你的业务需要协调多标签页，建议在前端使用 `BroadcastChannel` 或 `SharedWorker`。
 
 ---
 

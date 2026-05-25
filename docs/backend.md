@@ -288,7 +288,7 @@ try {
 
 ## Token 生成规则
 
-Token 用于前端建立 SSE 连接时的身份验证。Token 由后端生成，返回给前端。
+Token 用于前端建立 SSE 或 WebSocket 连接时的身份验证。Token 由后端生成，返回给前端。
 
 ### 格式
 
@@ -329,7 +329,7 @@ import (
 	"time"
 )
 
-// GenerateToken 生成 SSE 连接用的 Token
+// GenerateToken 生成连接用的 Token
 // salt: 签名盐值，需与服务端 config.yaml 中 token.salt 一致
 // channel, group, uuid: 用户标识三元组
 func GenerateToken(salt, channel, group, uuid string) string {
@@ -354,7 +354,7 @@ func main() {
 <?php
 
 /**
- * 生成 SSE 连接用的 Token
+ * 生成连接用的 Token
  *
  * @param string $salt    签名盐值，需与服务端 config.yaml 中 token.salt 一致
  * @param string $channel 业务频道

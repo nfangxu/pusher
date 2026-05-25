@@ -2,7 +2,7 @@
 
 ## 环境要求
 
-- Go 1.26.3+
+- Go 版本以 `go.mod` 中的 `go` 指令为准
 
 ## 编译运行
 
@@ -14,7 +14,7 @@ cd pusher
 # 安装依赖
 go mod tidy
 
-# 修改配置（至少修改 token.salt 和 push.token）
+# 修改配置（生产环境建议修改 token.salt 和 push.token）
 vim config.yaml
 
 # 编译
@@ -51,8 +51,8 @@ log:
   max_days: 7             # 日志保留天数
 
 sse:
-  heartbeat_interval: 30  # SSE 心跳间隔（秒）
-  read_timeout: 60        # 连接最大存活时间（秒），超过后主动断开
+  heartbeat_interval: 30  # SSE 心跳间隔（秒），WebSocket ping 也使用 30 秒固定间隔
+  read_timeout: 60        # SSE 心跳超时时间（秒），超过后主动断开
   cors_origins: "*"       # CORS 允许的来源，多个用逗号分隔
   worker_num: 8           # 推送队列消费 goroutine 数量
   push_queue_capacity: 10000  # 推送队列容量
@@ -60,12 +60,12 @@ sse:
   fan_out_workers: 200    # 并发 fan-out goroutine 数
 
 token:
-  salt: "your-secret-salt-here"  # Token 签名盐值，生产环境必须修改
-  expire_seconds: 3600           # Token 有效期（秒）
+  salt: "dev-secret-salt-change-before-production"  # Token HMAC 签名密钥，代码仅校验非空
+  expire_seconds: 3600                              # Token 有效期（秒）
 
 push:
-  token: "your-push-token-here"  # 推送接口认证 Token，生产环境必须修改
-  rate_limit: 100                # 推送接口限流（每秒请求数）
+  token: "dev-push-token-change-before-production"  # 推送接口认证 Token，代码仅校验非空
+  rate_limit: 100                                   # 推送接口限流（每秒请求数）
 ```
 
 ### 关键配置项说明
@@ -73,7 +73,7 @@ push:
 | 配置项 | 说明 | 建议值 |
 |--------|------|--------|
 | `sse.heartbeat_interval` | 心跳间隔，影响连接存活检测精度 | 30 |
-| `sse.read_timeout` | 单个连接最大存活时间，0 表示不限制 | 60-300 |
+| `sse.read_timeout` | SSE 心跳超时时间 | 60-300 |
 | `sse.worker_num` | 消费 goroutine 数，影响推送吞吐量 | CPU 核心数 * 2 |
 | `sse.push_queue_capacity` | 队列容量，满时新推送返回 2002 | 10000-100000 |
 | `sse.shard_num` | 分片数，高并发时减少锁竞争 | CPU 核心数 * 4 |
@@ -140,7 +140,7 @@ docker run -d \
 
 ```ini
 [Unit]
-Description=Pusher SSE Service
+Description=Pusher Push Service
 After=network.target
 
 [Service]
@@ -239,7 +239,7 @@ sudo journalctl -u pusher -f
 
 ### 内存估算
 
-每个 SSE 连接大约占用 1-2 KB 内存（包含注册表索引），100 万连接约需 1-2 GB 内存。
+每个连接大约占用 1-2 KB 内存（包含注册表索引，具体取决于 SSE/WS 协议栈开销），100 万连接约需 1-2 GB 内存。
 
 ---
 
@@ -266,6 +266,11 @@ sudo journalctl -u pusher -f
 **连接断开：**
 ```json
 {"level":"INFO","ts":"2026-05-23 10:35:00","msg":"SSE连接断开","channel":"news","group":"admin","uuid":"u1","duration":"300s"}
+```
+
+**WebSocket 连接建立：**
+```json
+{"level":"INFO","ts":"2026-05-23 10:30:00","msg":"WebSocket连接建立","channel":"news","group":"admin","uuid":"u1","client_ip":"192.168.1.1"}
 ```
 
 **推送记录：**
