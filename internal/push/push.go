@@ -116,6 +116,19 @@ func (q *PushQueue) matchTarget(target string) []*registry.Connection {
 }
 
 func (q *PushQueue) send(conn *registry.Connection, message json.RawMessage) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorw("推送 panic，连接可能已断开",
+				"channel", conn.Channel,
+				"group", conn.Group,
+				"uuid", conn.UUID,
+				"recover", fmt.Sprintf("%v", r),
+			)
+			conn.Close()
+			q.registry.Unregister(conn.UserKey)
+		}
+	}()
+
 	// 压缩 message，移除换行和多余空白，避免破坏 SSE 格式
 	var buf bytes.Buffer
 	if err := json.Compact(&buf, message); err != nil {

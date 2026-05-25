@@ -96,15 +96,37 @@ func (h *SSEHandler) heartbeat(conn *registry.Connection, beat chan<- struct{}) 
 		case <-conn.Done:
 			return
 		case <-ticker.C:
-			conn.Conn.(http.Flusher).Flush()
-			fmt.Fprintf(conn.Conn, ":heartbeat\n\n")
-			conn.Conn.(http.Flusher).Flush()
+			ok := h.safeHeartbeat(conn)
+			if !ok {
+				return
+			}
 			select {
 			case beat <- struct{}{}:
 			default:
 			}
 		}
 	}
+}
+
+func (h *SSEHandler) safeHeartbeat(conn *registry.Connection) (ok bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorw("心跳 panic，连接可能已断开",
+				"channel", conn.Channel,
+				"group", conn.Group,
+				"uuid", conn.UUID,
+				"recover", fmt.Sprintf("%v", r),
+			)
+			conn.Close()
+			h.registry.Unregister(conn.UserKey)
+			ok = false
+		}
+	}()
+
+	conn.Conn.(http.Flusher).Flush()
+	fmt.Fprintf(conn.Conn, ":heartbeat\n\n")
+	conn.Conn.(http.Flusher).Flush()
+	return true
 }
 
 func (h *SSEHandler) waitForDisconnect(c *gin.Context, conn *registry.Connection) {
