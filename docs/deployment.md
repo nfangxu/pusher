@@ -57,6 +57,7 @@ sse:
   worker_num: 8           # 推送队列消费 goroutine 数量
   push_queue_capacity: 10000  # 推送队列容量
   shard_num: 32           # 连接注册表分片数
+  fan_out_workers: 200    # 并发 fan-out goroutine 数
 
 token:
   salt: "your-secret-salt-here"  # Token 签名盐值，生产环境必须修改
@@ -76,6 +77,7 @@ push:
 | `sse.worker_num` | 消费 goroutine 数，影响推送吞吐量 | CPU 核心数 * 2 |
 | `sse.push_queue_capacity` | 队列容量，满时新推送返回 2002 | 10000-100000 |
 | `sse.shard_num` | 分片数，高并发时减少锁竞争 | CPU 核心数 * 4 |
+| `sse.fan_out_workers` | 并发 fan-out goroutine 数，大量连接时降低推送延迟 | 200 |
 | `token.expire_seconds` | Token 有效期，过期后客户端需重新获取 | 3600 |
 | `push.rate_limit` | 推送 QPS 上限，防止单点打满 | 按业务需求设置 |
 
@@ -222,7 +224,10 @@ sudo journalctl -u pusher -f
 |------|------|----------|
 | `sse.worker_num` | 消费 goroutine 数 | CPU 核心数 * 2 |
 | `sse.push_queue_capacity` | 队列容量 | 根据业务峰值设置，10000-100000 |
+| `sse.fan_out_workers` | 并发 fan-out goroutine 数 | 连接数多时增大，建议 100-500 |
 | `push.rate_limit` | 推送 QPS 上限 | 根据业务需求和服务器能力设置 |
+
+> **Fan-out 说明：** 全量广播时，连接数 ≤100 走顺序发送，>100 走并发 fan-out。`fan_out_workers` 控制并发度。详见 [Fan-out 分析报告](fan-out-report.md)。
 
 ### 内存估算
 
