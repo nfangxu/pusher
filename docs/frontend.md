@@ -2,22 +2,18 @@
 
 ## 客户端示例
 
-`examples/html/index.html` — 一个完整的 SSE 调试页面，支持：
+`examples/html/index.html` — SSE 调试页面，支持前端 Token 生成、连接管理、实时日志。
 
-- 配置服务地址、Salt、Channel/Group/UUID
-- 前端自动生成 Token（与服务端签名算法一致）
-- 一键连接/断开
-- 实时显示消息和心跳
-- 自动重连
+`examples/html/ws.html` — WebSocket 调试页面，功能与 SSE 示例一致，连接方式替换为 WebSocket。
 
 使用方式：
 
 ```bash
-# 直接在浏览器中打开
+# SSE 示例
 open examples/html/index.html
 
-# 或用 Python 起一个静态服务
-cd examples/html && python3 -m http.server 3000
+# WebSocket 示例
+open examples/html/ws.html
 ```
 
 ---
