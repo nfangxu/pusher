@@ -1,10 +1,8 @@
 package main
 
 import (
-	"bufio"
-	"context"
 	"fmt"
-	"net/http"
+	"net"
 	"sync"
 	"time"
 
@@ -17,8 +15,6 @@ func runConnect(url, salt string, num, concurrency int) {
 	stats := NewStats("连接压测")
 	sem := make(chan struct{}, concurrency)
 	var wg sync.WaitGroup
-
-	client := &http.Client{Timeout: 10 * time.Second}
 
 	for i := 0; i < num; i++ {
 		wg.Add(1)
@@ -34,7 +30,7 @@ func runConnect(url, salt string, num, concurrency int) {
 			tk := token.Generate(salt, channel, group, uuid)
 
 			start := time.Now()
-			ok := doConnect(client, url, tk)
+			ok := doConnect(url, tk)
 			stats.Record(ok, time.Since(start))
 		}(i)
 	}
@@ -43,26 +39,25 @@ func runConnect(url, salt string, num, concurrency int) {
 	stats.Report()
 }
 
-func doConnect(client *http.Client, url, tk string) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url+"/sse/connect?token="+tk, nil)
+func doConnect(url, tk string) bool {
+	conn, err := net.DialTimeout("tcp", url[len("http://"):], 3*time.Second)
 	if err != nil {
 		return false
 	}
+	defer conn.Close()
 
-	resp, err := client.Do(req)
-	if err != nil {
+	conn.SetDeadline(time.Now().Add(5 * time.Second))
+
+	req := fmt.Sprintf("GET /sse/connect?token=%s HTTP/1.1\r\nHost: localhost\r\n\r\n", tk)
+	if _, err := conn.Write([]byte(req)); err != nil {
 		return false
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	buf := make([]byte, 1024)
+	n, err := conn.Read(buf)
+	if err != nil || n == 0 {
 		return false
 	}
 
-	reader := bufio.NewReader(resp.Body)
-	_, err = reader.ReadString('\n')
-	return err == nil
+	return len(buf) > 12 && string(buf[9:12]) == "200"
 }

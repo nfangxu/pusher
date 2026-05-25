@@ -66,6 +66,7 @@ func runPushCmd() {
 	num := fs.Int("num", 1000, "推送请求数")
 	concurrency := fs.Int("concurrency", 100, "并发数")
 	target := fs.String("target", "*", "推送目标")
+	qps := fs.Int("qps", 80, "推送 QPS（不超过服务端限流值）")
 	fs.Parse(os.Args[2:])
 
 	if *salt == "" || *pushToken == "" {
@@ -74,7 +75,7 @@ func runPushCmd() {
 		os.Exit(1)
 	}
 
-	runPush(*url, *salt, *pushToken, *target, *num, *concurrency)
+	runPush(*url, *salt, *pushToken, *target, *num, *concurrency, *qps)
 }
 
 func runStabilityCmd() {

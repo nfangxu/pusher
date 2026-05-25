@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -13,13 +14,13 @@ import (
 	"pusher/internal/token"
 )
 
-func runPush(url, salt, pushToken, target string, num, concurrency int) {
-	fmt.Printf("开始推送压测: url=%s target=%s num=%d concurrency=%d\n", url, target, num, concurrency)
+func runPush(url, salt, pushToken, target string, num, concurrency, qps int) {
+	fmt.Printf("开始推送压测: url=%s target=%s num=%d concurrency=%d qps=%d\n", url, target, num, concurrency, qps)
 
 	// 建立在线连接
 	connCount := concurrency * 10
-	if connCount > 1000 {
-		connCount = 1000
+	if connCount > 500 {
+		connCount = 500
 	}
 	fmt.Printf("建立 %d 个在线连接...\n", connCount)
 	holdConnections(url, salt, connCount)
@@ -27,13 +28,18 @@ func runPush(url, salt, pushToken, target string, num, concurrency int) {
 
 	// 推送压测
 	stats := NewStats("推送压测")
-	sem := make(chan struct{}, concurrency)
-	var wg sync.WaitGroup
-
 	client := &http.Client{Timeout: 5 * time.Second}
 	var seq atomic.Int64
+	var wg sync.WaitGroup
+
+	// 用 ticker 控制发送速率
+	ticker := time.NewTicker(time.Second / time.Duration(qps))
+	defer ticker.Stop()
+
+	sem := make(chan struct{}, concurrency)
 
 	for i := 0; i < num; i++ {
+		<-ticker.C
 		wg.Add(1)
 		sem <- struct{}{}
 
@@ -85,8 +91,8 @@ func doPush(client *http.Client, url, pushToken string, targets []string, messag
 }
 
 func holdConnections(url, salt string, count int) {
-	client := &http.Client{Timeout: 10 * time.Second}
 	var wg sync.WaitGroup
+	addr := url[len("http://"):]
 
 	for i := 0; i < count; i++ {
 		wg.Add(1)
@@ -97,16 +103,18 @@ func holdConnections(url, salt string, count int) {
 			uuid := fmt.Sprintf("u%d", idx)
 			tk := token.Generate(salt, channel, group, uuid)
 
-			req, _ := http.NewRequest("GET", url+"/sse/connect?token="+tk, nil)
-			resp, err := client.Do(req)
+			conn, err := net.DialTimeout("tcp", addr, 3*time.Second)
 			if err != nil {
 				return
 			}
+
+			req := fmt.Sprintf("GET /sse/connect?token=%s HTTP/1.1\r\nHost: localhost\r\n\r\n", tk)
+			conn.Write([]byte(req))
 			// 保持连接不关闭
+			buf := make([]byte, 1)
 			go func() {
-				buf := make([]byte, 1)
 				for {
-					if _, err := resp.Body.Read(buf); err != nil {
+					if _, err := conn.Read(buf); err != nil {
 						return
 					}
 				}
