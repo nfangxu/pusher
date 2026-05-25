@@ -65,7 +65,7 @@ func (h *SSEHandler) Connect(c *gin.Context) {
 		Channel:   claims.Channel,
 		Group:     claims.Group,
 		UUID:      claims.UUID,
-		Conn:      c.Writer,
+		Conn:      NewSSEWriter(c.Writer),
 		Done:      make(chan struct{}),
 		CreatedAt: time.Now(),
 	}
