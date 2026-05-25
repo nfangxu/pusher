@@ -14,6 +14,7 @@ sse:
   worker_num: 8
   push_queue_capacity: 10000
   shard_num: 32
+  fan_out_workers: 200
 
 token:
   salt: "your-secret-salt-here"

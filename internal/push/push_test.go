@@ -29,7 +29,7 @@ func newTestConnection(channel, group, uuid string) *registry.Connection {
 
 func TestPushQueue_Push(t *testing.T) {
 	reg := registry.New(4)
-	q := New(reg, 100, 2)
+	q := New(reg, 100, 2, 10)
 	q.Start()
 
 	task := PushTask{
@@ -44,7 +44,7 @@ func TestPushQueue_Push(t *testing.T) {
 
 func TestPushQueue_PushFull(t *testing.T) {
 	reg := registry.New(4)
-	q := New(reg, 1, 2)
+	q := New(reg, 1, 2, 10)
 	q.Start()
 
 	task := PushTask{
@@ -61,7 +61,7 @@ func TestPushQueue_PushFull(t *testing.T) {
 
 func TestPushQueue_MatchTarget_All(t *testing.T) {
 	reg := registry.New(4)
-	q := New(reg, 100, 2)
+	q := New(reg, 100, 2, 10)
 
 	reg.Register(newTestConnection("news", "admin", "u1"))
 	reg.Register(newTestConnection("sports", "user", "u2"))
@@ -74,7 +74,7 @@ func TestPushQueue_MatchTarget_All(t *testing.T) {
 
 func TestPushQueue_MatchTarget_Channel(t *testing.T) {
 	reg := registry.New(4)
-	q := New(reg, 100, 2)
+	q := New(reg, 100, 2, 10)
 
 	reg.Register(newTestConnection("news", "admin", "u1"))
 	reg.Register(newTestConnection("news", "user", "u2"))
@@ -93,7 +93,7 @@ func TestPushQueue_MatchTarget_Channel(t *testing.T) {
 
 func TestPushQueue_MatchTarget_Group(t *testing.T) {
 	reg := registry.New(4)
-	q := New(reg, 100, 2)
+	q := New(reg, 100, 2, 10)
 
 	reg.Register(newTestConnection("news", "admin", "u1"))
 	reg.Register(newTestConnection("news", "user", "u2"))
@@ -106,7 +106,7 @@ func TestPushQueue_MatchTarget_Group(t *testing.T) {
 
 func TestPushQueue_MatchTarget_User(t *testing.T) {
 	reg := registry.New(4)
-	q := New(reg, 100, 2)
+	q := New(reg, 100, 2, 10)
 
 	reg.Register(newTestConnection("news", "admin", "u1"))
 	reg.Register(newTestConnection("news", "admin", "u2"))
@@ -119,7 +119,7 @@ func TestPushQueue_MatchTarget_User(t *testing.T) {
 
 func TestPushQueue_NoDuplicatePush(t *testing.T) {
 	reg := registry.New(4)
-	q := New(reg, 100, 2)
+	q := New(reg, 100, 2, 10)
 	q.Start()
 
 	conn := newTestConnection("news", "admin", "u1")

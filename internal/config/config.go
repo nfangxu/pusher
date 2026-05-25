@@ -33,6 +33,7 @@ type SSEConfig struct {
 	WorkerNum         int    `yaml:"worker_num"`
 	PushQueueCapacity int    `yaml:"push_queue_capacity"`
 	ShardNum          int    `yaml:"shard_num"`
+	FanOutWorkers     int    `yaml:"fan_out_workers"`
 }
 
 type TokenConfig struct {
@@ -107,6 +108,9 @@ func (c *Config) setDefaults() {
 	}
 	if c.SSE.ShardNum == 0 {
 		c.SSE.ShardNum = 32
+	}
+	if c.SSE.FanOutWorkers == 0 {
+		c.SSE.FanOutWorkers = 200
 	}
 	if c.Token.ExpireSeconds == 0 {
 		c.Token.ExpireSeconds = 3600

@@ -1,14 +1,16 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"pusher/internal/log"
 	"pusher/internal/registry"
 	"pusher/internal/token"
+
+	"github.com/gin-gonic/gin"
 )
 
 type SSEHandler struct {
@@ -42,8 +44,8 @@ func (h *SSEHandler) Connect(c *gin.Context) {
 		}
 		log.Errorw("Token校验失败", "error", err.Error(), "token", tokenPreview)
 
-		switch err {
-		case token.ErrTokenExpired:
+		switch {
+		case errors.Is(err, token.ErrTokenExpired):
 			abortWithError(c, 1004, "token expired")
 		default:
 			abortWithError(c, 1001, "invalid token")

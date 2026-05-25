@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 
 	"pusher/internal/log"
 	"pusher/internal/registry"
@@ -16,16 +17,18 @@ type PushTask struct {
 }
 
 type PushQueue struct {
-	taskQueue chan PushTask
-	registry  *registry.Registry
-	workerNum int
+	taskQueue     chan PushTask
+	registry      *registry.Registry
+	workerNum     int
+	fanOutWorkers int
 }
 
-func New(registry *registry.Registry, capacity, workerNum int) *PushQueue {
+func New(registry *registry.Registry, capacity, workerNum, fanOutWorkers int) *PushQueue {
 	return &PushQueue{
-		taskQueue: make(chan PushTask, capacity),
-		registry:  registry,
-		workerNum: workerNum,
+		taskQueue:     make(chan PushTask, capacity),
+		registry:      registry,
+		workerNum:     workerNum,
+		fanOutWorkers: fanOutWorkers,
 	}
 }
 
@@ -33,7 +36,7 @@ func (q *PushQueue) Start() {
 	for i := 0; i < q.workerNum; i++ {
 		go q.worker(i)
 	}
-	log.Infof("push queue started with %d workers", q.workerNum)
+	log.Infof("push queue started with %d workers, fan-out workers %d", q.workerNum, q.fanOutWorkers)
 }
 
 func (q *PushQueue) Stop() {
@@ -57,6 +60,7 @@ func (q *PushQueue) worker(id int) {
 
 func (q *PushQueue) process(task PushTask) {
 	seen := make(map[string]bool)
+	var allConns []*registry.Connection
 
 	for _, target := range task.Targets {
 		conns := q.matchTarget(target)
@@ -71,8 +75,100 @@ func (q *PushQueue) process(task PushTask) {
 				continue
 			}
 
+			allConns = append(allConns, conn)
+		}
+	}
+
+	if len(allConns) == 0 {
+		return
+	}
+
+	if len(allConns) <= 100 {
+		for _, conn := range allConns {
 			q.send(conn, task.Message)
 		}
+	} else {
+		q.fanOut(allConns, task.Message)
+	}
+}
+
+func (q *PushQueue) fanOut(conns []*registry.Connection, message json.RawMessage) {
+	var msgBuf bytes.Buffer
+	if err := json.Compact(&msgBuf, message); err != nil {
+		log.Errorw("消息压缩失败", "error", err.Error())
+		return
+	}
+	compactMsg := msgBuf.Bytes()
+
+	workers := q.fanOutWorkers
+	if workers > len(conns) {
+		workers = len(conns)
+	}
+
+	chunkSize := (len(conns) + workers - 1) / workers
+
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		start := i * chunkSize
+		end := start + chunkSize
+		if end > len(conns) {
+			end = len(conns)
+		}
+		if start >= end {
+			break
+		}
+
+		wg.Add(1)
+		go func(chunk []*registry.Connection) {
+			defer wg.Done()
+			q.sendBatch(chunk, compactMsg)
+		}(conns[start:end])
+	}
+	wg.Wait()
+}
+
+func (q *PushQueue) sendBatch(conns []*registry.Connection, compactMsg []byte) {
+	var buf bytes.Buffer
+	buf.Grow(len(compactMsg) + 200)
+
+	for _, conn := range conns {
+		if conn.IsClosed() {
+			q.registry.Unregister(conn.UserKey)
+			continue
+		}
+
+		buf.Reset()
+		buf.WriteString("event: message\ndata: {\"channel\":\"")
+		buf.WriteString(conn.Channel)
+		buf.WriteString("\",\"group\":\"")
+		buf.WriteString(conn.Group)
+		buf.WriteString("\",\"uuid\":\"")
+		buf.WriteString(conn.UUID)
+		buf.WriteString("\",\"message\":")
+		buf.Write(compactMsg)
+		buf.WriteString("}\n\n")
+
+		q.writeToConn(conn, buf.Bytes())
+	}
+}
+
+func (q *PushQueue) writeToConn(conn *registry.Connection, data []byte) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorw("推送 panic，连接可能已断开",
+				"channel", conn.Channel,
+				"group", conn.Group,
+				"uuid", conn.UUID,
+				"recover", fmt.Sprintf("%v", r),
+			)
+			conn.Close()
+			q.registry.Unregister(conn.UserKey)
+		}
+	}()
+
+	conn.Conn.Write(data)
+	if f, ok := conn.Conn.(interface{ Flush() }); ok {
+		f.Flush()
 	}
 }
 
@@ -129,7 +225,6 @@ func (q *PushQueue) send(conn *registry.Connection, message json.RawMessage) {
 		}
 	}()
 
-	// 压缩 message，移除换行和多余空白，避免破坏 SSE 格式
 	var buf bytes.Buffer
 	if err := json.Compact(&buf, message); err != nil {
 		log.Errorw("消息压缩失败", "error", err.Error())

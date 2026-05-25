@@ -14,7 +14,7 @@ import (
 
 func newTestPushQueue() *push.PushQueue {
 	reg := registry.New(4)
-	q := push.New(reg, 100, 2)
+	q := push.New(reg, 100, 2, 10)
 	q.Start()
 	return q
 }

@@ -40,7 +40,7 @@ func Init(level, path string, maxDays int) error {
 		),
 	)
 
-	logger := zap.New(core, zap.AddCaller(), zap.AddCallerSkip(0))
+	logger := zap.New(core, zap.AddCaller(), zap.AddCallerSkip(1))
 	sugar = logger.Sugar()
 	return nil
 }
