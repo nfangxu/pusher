@@ -38,6 +38,7 @@ func main() {
 	pushQueue.Start()
 
 	sseHandler := handler.NewSSEHandler(reg, validator, cfg.SSE.HeartbeatInterval, cfg.SSE.ReadTimeout)
+	wsHandler := handler.NewWsHandler(reg, validator)
 	pushHandler := handler.NewPushHandler(pushQueue, cfg.Push.Token)
 	healthHandler := handler.NewHealthHandler(reg)
 
@@ -47,6 +48,7 @@ func main() {
 	r.Use(corsMiddleware(cfg.SSE.CORSOrigins))
 
 	r.GET("/sse/connect", sseHandler.Connect)
+	r.GET("/ws/connect", wsHandler.Connect)
 	r.POST("/push", handler.RateLimitMiddleware(cfg.Push.RateLimit), pushHandler.Push)
 	r.GET("/health", healthHandler.Health)
 

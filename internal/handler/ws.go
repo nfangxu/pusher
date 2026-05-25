@@ -126,6 +126,7 @@ func (h *WsHandler) Connect(c *gin.Context) {
 	)
 
 	go h.readPump(wsConn, connection)
+	go h.writePump(wsConn)
 }
 
 func (h *WsHandler) readPump(wsConn *WsConn, conn *registry.Connection) {
@@ -145,6 +146,23 @@ func (h *WsHandler) readPump(wsConn *WsConn, conn *registry.Connection) {
 		if err != nil {
 			wsConn.Close()
 			return
+		}
+	}
+}
+
+func (h *WsHandler) writePump(wsConn *WsConn) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-wsConn.done:
+			return
+		case <-ticker.C:
+			if err := wsConn.conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(5*time.Second)); err != nil {
+				wsConn.Close()
+				return
+			}
 		}
 	}
 }
