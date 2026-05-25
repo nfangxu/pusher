@@ -72,3 +72,5 @@ Edit `config.yaml` (or set env vars `PUSHER_SERVER_PORT`, `PUSHER_SERVER_SALT`, 
 - Panic recovery via `defer recover()` on all Write/Flush operations to connections (closed connections panic)
 - SSE data lines must not contain newlines — use `json.Compact` on message payloads before embedding
 - Heartbeat resets connection timeout timer via channel signal (not a one-shot timer)
+- Fan-out: <=100 connections sequential, >100 concurrent (configurable via `fan_out_workers`, default 200)
+- json.Compact shared once across all connections in a fan-out batch
