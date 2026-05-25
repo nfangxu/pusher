@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -67,6 +68,20 @@ func main() {
 		}
 	}()
 
+	pprofMux := http.NewServeMux()
+	pprofMux.HandleFunc("/debug/pprof/", pprof.Index)
+	pprofMux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	pprofMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	pprofMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	pprofMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	pprofSrv := &http.Server{Addr: "localhost:6060", Handler: pprofMux}
+	go func() {
+		log.Infof("pprof server listening on localhost:6060")
+		if err := pprofSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Warnw("pprof server error", "error", err.Error())
+		}
+	}()
+
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
@@ -81,6 +96,9 @@ func main() {
 
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Errorf("server forced to shutdown: %v", err)
+	}
+	if err := pprofSrv.Shutdown(ctx); err != nil {
+		log.Warnw("pprof server shutdown error", "error", err.Error())
 	}
 
 	connections, groups, channels := reg.Stats()

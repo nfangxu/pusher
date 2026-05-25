@@ -293,3 +293,87 @@ sudo journalctl -u pusher -f
 - 按天自动轮转
 - 默认保留 7 天日志（通过 `log.max_days` 配置）
 - 使用 lumberjack 实现，无需外部 logrotate
+
+---
+
+## 性能监控 (pprof)
+
+服务内置 Go 标准库 pprof 性能分析工具，默认监听 `localhost:6060`，仅本地可访问。
+
+### 常用分析端点
+
+| 端点 | 用途 | 命令 |
+|------|------|--------|
+| `/debug/pprof/` | 首页概览 | `curl http://localhost:6060/debug/pprof/` |
+| `/debug/pprof/heap` | 堆内存快照 | `go tool pprof http://localhost:6060/debug/pprof/heap` |
+| `/debug/pprof/goroutine` | Goroutine 栈 | `curl http://localhost:6060/debug/pprof/goroutine?debug=1` |
+| `/debug/pprof/allocs` | 内存分配采样 | `go tool pprof http://localhost:6060/debug/pprof/allocs` |
+| `/debug/pprof/profile` | CPU 30秒采样 | `go tool pprof http://localhost:6060/debug/pprof/profile` |
+| `/debug/pprof/block` | 阻塞分析 | 需开启 `runtime.SetBlockProfileRate` |
+
+### 常用分析命令
+
+```bash
+# 查看堆内存使用（线上出报告
+go tool pprof http://localhost:6060/debug/pprof/heap
+# (pprof) top 10   # 前 10 大内存占用
+# (pprof) list push   # 查看 push 包详情
+# (pprof) web      # 生成 SVG 调用图（需 graphviz）
+
+# 查看 Goroutine 数量（监控
+curl -s 'http://localhost:6060/debug/pprof/goroutine?debug=1 | head -1
+
+# 30 秒 CPU 采样
+go tool pprof http://localhost:6060/debug/pprof/profile
+
+# 对比两次堆内存对比（采集
+curl -s 'http://localhost:6060/debug/pprof/heap > heap1.pprof
+# 5 分钟后
+curl -s 'http://localhost:6060/debug/pprof/heap > heap2.pprof
+go tool pprof -base heap1.pprof heap2.pprof
+```
+
+---
+
+## 线上关注指标
+
+### 1. 连接相关
+
+| 指标 | 健康阈值 | 告警阈值 | 排查方向 |
+|------|-----------|----------|---------|
+| **Goroutine 数量 | idle: 15 + 连接数 × 3 | > 连接数 × 5 持续增长 | curl pprof goroutine，查找泄露 |
+| **堆内存 (Heap InUse) | < 连接数 × 2KB | > 连接数 × 5KB 持续增长 | pprof heap，allocs |
+| **活跃连接数** | 预期业务正常值 | 突增 / 突降 | GET /health |
+| **连接建立成功率 | > 99.5% | < 95% | 查看 Token 校验日志 |
+
+### 2. 推送相关
+
+| 指标 | 健康阈值 | 告警阈值 | 排查方向 |
+|------|-----------|----------|---------|
+| **推送成功率** | > 99.9% | < 99% | 队列是否满，连接是否有效 |
+| **推送延迟 P99 | < 500ms | > 1s | fan_out_workers 是否足够，连接数是否过大 |
+| **推送队列长度 | < 容量的 50% | > 容量的 80% | 增大 worker_num 或 队列阻塞 |
+
+### 3. 系统相关
+
+| 指标 | 健康阈值 | 告警阈值 | 排查方向 |
+|------|-----------|----------|---------|
+| **CPU 使用率** | < 70% | > 85% | pprof profile，检查 fan-out 并发 |
+| **GC 频率 | < 10 次/秒 | > 5 次/秒 | allocs 分析分配热点 |
+| **文件描述符** | < 总量的 50% | > 总量的 80% | lsof -p PID |
+
+### 4. 故障排查清单
+
+**内存持续增长？
+1. `goroutine 数量是否稳定？curl pprof/goroutine 确认无泄露
+2. `pprof heap 查看 top，定位分配热点
+3. `allocs 对比两次 heap 快照，定位增长来源
+
+**推送延迟升高？
+1. `fan_out_workers 是否足够
+2. `推送目标是否过大（全量广播延迟自然更高）
+3. `连接数是否超过单 CPU 核心数 × 10k
+
+**服务无法退出？
+1. `确认 CloseAll 被调用（主流程已内置）
+2. `查看是否有外部连接未正常关闭
