@@ -15,13 +15,39 @@ func init() {
 	log.Init("debug", "/dev/null", 7)
 }
 
+type mockConnWriter struct {
+	*httptest.ResponseRecorder
+	done chan struct{}
+}
+
+func (m *mockConnWriter) Close() {
+	m.done <- struct{}{}
+}
+
+func (m *mockConnWriter) IsClosed() bool {
+	select {
+	case <-m.done:
+		return true
+	default:
+		return false
+	}
+}
+
+func (m *mockConnWriter) Done() <-chan struct{} {
+	return m.done
+}
+
 func newTestConnection(channel, group, uuid string) *registry.Connection {
 	return &registry.Connection{
 		UserKey:   channel + ":" + group + ":" + uuid,
 		Channel:   channel,
 		Group:     group,
 		UUID:      uuid,
-		Conn:      httptest.NewRecorder(),
+		Protocol:  "sse",
+		Conn: &mockConnWriter{
+			ResponseRecorder: httptest.NewRecorder(),
+			done:             make(chan struct{}),
+		},
 		Done:      make(chan struct{}),
 		CreatedAt: time.Now(),
 	}
@@ -132,7 +158,7 @@ func TestPushQueue_NoDuplicatePush(t *testing.T) {
 
 	q.process(task)
 
-	recorder := conn.Conn.(*httptest.ResponseRecorder)
+	recorder := conn.Conn.(*mockConnWriter).ResponseRecorder
 	body := recorder.Body.String()
 
 	count := 0
