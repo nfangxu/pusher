@@ -11,6 +11,7 @@ type RegistryShard struct {
 	byGroup   map[string][]*Connection
 	byChannel map[string][]*Connection
 	mu        sync.RWMutex
+	delCount  int
 }
 
 type Registry struct {
@@ -72,6 +73,16 @@ func (r *Registry) Unregister(userKey string) {
 		conn.Close()
 		r.removeFromIndices(shard, conn)
 		delete(shard.byUser, userKey)
+
+		shard.delCount++
+		if shard.delCount >= 1000 && shard.delCount >= len(shard.byUser)/2 {
+			newByUser := make(map[string]*Connection, len(shard.byUser))
+			for k, v := range shard.byUser {
+				newByUser[k] = v
+			}
+			shard.byUser = newByUser
+			shard.delCount = 0
+		}
 	}
 }
 
@@ -122,10 +133,7 @@ func (r *Registry) GetByGroup(channel, group string) []*Connection {
 	defer shard.mu.RUnlock()
 
 	groupKey := channel + ":" + group
-	conns := shard.byGroup[groupKey]
-	result := make([]*Connection, len(conns))
-	copy(result, conns)
-	return result
+	return shard.byGroup[groupKey]
 }
 
 func (r *Registry) GetByChannel(channel string) []*Connection {
@@ -133,14 +141,12 @@ func (r *Registry) GetByChannel(channel string) []*Connection {
 	shard.mu.RLock()
 	defer shard.mu.RUnlock()
 
-	conns := shard.byChannel[channel]
-	result := make([]*Connection, len(conns))
-	copy(result, conns)
-	return result
+	return shard.byChannel[channel]
 }
 
 func (r *Registry) GetAll() []*Connection {
-	var result []*Connection
+	total, _, _ := r.Stats()
+	result := make([]*Connection, 0, total)
 	for _, shard := range r.shards {
 		shard.mu.RLock()
 		for _, conn := range shard.byUser {
@@ -160,4 +166,14 @@ func (r *Registry) Stats() (connections, groups, channels int) {
 		shard.mu.RUnlock()
 	}
 	return
+}
+
+func (r *Registry) CloseAll() {
+	for _, shard := range r.shards {
+		shard.mu.Lock()
+		for _, conn := range shard.byUser {
+			conn.Close()
+		}
+		shard.mu.Unlock()
+	}
 }
