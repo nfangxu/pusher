@@ -17,9 +17,9 @@ sse:
   fan_out_workers: 200
 
 token:
-  salt: "your-secret-salt-here"
+  salt: "dev-secret-salt-change-before-production"
   expire_seconds: 3600
 
 push:
-  token: "your-push-token-here"
+  token: "dev-push-token-change-before-production"
   rate_limit: 100

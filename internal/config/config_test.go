@@ -103,61 +103,59 @@ push:
 	}
 }
 
-func TestLoad_ValidationError(t *testing.T) {
-	tests := []struct {
-		name    string
-		content string
-	}{
-		{
-			name: "missing port",
-			content: `
-token:
-  salt: "test-salt"
-push:
-  token: "test-push-token"
-`,
-		},
-		{
-			name: "default salt",
-			content: `
+func TestLoad_AllowsNonEmptyPlaceholderSecrets(t *testing.T) {
+	content := `
 app:
   port: 8080
 token:
   salt: "your-secret-salt-here"
 push:
-  token: "test-push-token"
-`,
-		},
-		{
-			name: "default push token",
-			content: `
-app:
-  port: 8080
+  token: "your-push-token-here"
+`
+	tmpFile, err := os.CreateTemp("", "config-*.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	if _, err := tmpFile.WriteString(content); err != nil {
+		t.Fatal(err)
+	}
+	tmpFile.Close()
+
+	cfg, err := Load(tmpFile.Name())
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.Token.Salt != "your-secret-salt-here" {
+		t.Errorf("Token.Salt = %v, want your-secret-salt-here", cfg.Token.Salt)
+	}
+	if cfg.Push.Token != "your-push-token-here" {
+		t.Errorf("Push.Token = %v, want your-push-token-here", cfg.Push.Token)
+	}
+}
+
+func TestLoad_ValidationError(t *testing.T) {
+	content := `
 token:
   salt: "test-salt"
 push:
-  token: "your-push-token-here"
-`,
-		},
+  token: "test-push-token"
+`
+	tmpFile, err := os.CreateTemp("", "config-*.yaml")
+	if err != nil {
+		t.Fatal(err)
 	}
+	defer os.Remove(tmpFile.Name())
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tmpFile, err := os.CreateTemp("", "config-*.yaml")
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer os.Remove(tmpFile.Name())
+	if _, err := tmpFile.WriteString(content); err != nil {
+		t.Fatal(err)
+	}
+	tmpFile.Close()
 
-			if _, err := tmpFile.WriteString(tt.content); err != nil {
-				t.Fatal(err)
-			}
-			tmpFile.Close()
-
-			_, err = Load(tmpFile.Name())
-			if err == nil {
-				t.Error("Load() expected error, got nil")
-			}
-		})
+	_, err = Load(tmpFile.Name())
+	if err == nil {
+		t.Error("Load() expected error, got nil")
 	}
 }

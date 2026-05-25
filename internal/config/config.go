@@ -70,10 +70,10 @@ func (c *Config) validate() error {
 		return fmt.Errorf("app.port is required")
 	}
 	if c.Token.Salt == "" {
-		return fmt.Errorf("token.salt must be set to a real value")
+		return fmt.Errorf("token.salt is required")
 	}
 	if c.Push.Token == "" {
-		return fmt.Errorf("push.token must be set to a real value")
+		return fmt.Errorf("push.token is required")
 	}
 	return nil
 }

@@ -293,25 +293,25 @@ Token 用于前端建立 SSE 连接时的身份验证。Token 由后端生成，
 ### 格式
 
 ```
-base64(channel={channel}&group={group}&uuid={uuid}&ts={unix_timestamp}&sign={md5_sign})
+base64(channel={channel}&group={group}&uuid={uuid}&ts={unix_timestamp}&sign={HMAC-SHA256_sign})
 ```
 
 ### 签名算法
 
 ```
-sign = md5({channel}{group}{uuid}{ts}{salt})
+sign = hex(hmac_sha256(secret=salt, message={channel}{group}{uuid}{ts}))
 ```
 
-注意：各字段值**直接拼接，无分隔符**。
+注意：签名消息中各字段值**直接拼接，无分隔符**，salt 作为 HMAC secret 使用。
 
 ### 生成示例
 
 以 `channel=news`、`group=admin`、`uuid=u1`、`ts=1747830600`、`salt=mysecret` 为例：
 
 ```
-拼接原文: "newsadminu11747830600mysecret"
-MD5:      "a1b2c3d4e5f6..."
-Token:    base64("channel=news&group=admin&uuid=u1&ts=1747830600&sign=a1b2c3d4e5f6...")
+签名消息: "newsadminu11747830600"
+HMAC-SHA256: "a1b2c3d4e5f6..."
+Token:       base64("channel=news&group=admin&uuid=u1&ts=1747830600&sign=a1b2c3d4e5f6...")
 ```
 
 ### 各语言 Token 生成代码
@@ -322,7 +322,8 @@ Token:    base64("channel=news&group=admin&uuid=u1&ts=1747830600&sign=a1b2c3d4e5
 package main
 
 import (
-	"crypto/md5"
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 	"time"
@@ -333,8 +334,10 @@ import (
 // channel, group, uuid: 用户标识三元组
 func GenerateToken(salt, channel, group, uuid string) string {
 	ts := time.Now().Unix()
-	signInput := fmt.Sprintf("%s%s%s%d%s", channel, group, uuid, ts, salt)
-	sign := fmt.Sprintf("%x", md5.Sum([]byte(signInput)))
+	signInput := fmt.Sprintf("%s%s%s%d", channel, group, uuid, ts)
+	mac := hmac.New(sha256.New, []byte(salt))
+	mac.Write([]byte(signInput))
+	sign := fmt.Sprintf("%x", mac.Sum(nil))
 	token := fmt.Sprintf("channel=%s&group=%s&uuid=%s&ts=%d&sign=%s", channel, group, uuid, ts, sign)
 	return base64.StdEncoding.EncodeToString([]byte(token))
 }
@@ -362,8 +365,8 @@ func main() {
 function generateToken(string $salt, string $channel, string $group, string $uuid): string
 {
     $ts = time();
-    $signInput = $channel . $group . $uuid . $ts . $salt;
-    $sign = md5($signInput);
+    $signInput = $channel . $group . $uuid . $ts;
+    $sign = hash_hmac('sha256', $signInput, $salt);
     $token = "channel={$channel}&group={$group}&uuid={$uuid}&ts={$ts}&sign={$sign}";
     return base64_encode($token);
 }

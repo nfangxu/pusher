@@ -5,14 +5,16 @@ import (
 )
 
 type SSEWriter struct {
-	w http.ResponseWriter
-	f http.Flusher
+	w    http.ResponseWriter
+	f    http.Flusher
+	done chan struct{}
 }
 
 func NewSSEWriter(w http.ResponseWriter) *SSEWriter {
 	return &SSEWriter{
-		w: w,
-		f: w.(http.Flusher),
+		w:    w,
+		f:    w.(http.Flusher),
+		done: make(chan struct{}),
 	}
 }
 
@@ -25,13 +27,22 @@ func (s *SSEWriter) Flush() {
 }
 
 func (s *SSEWriter) Close() {
-	// SSE 连接不通过此处关闭，由 waitForDisconnect 管理
+	select {
+	case <-s.done:
+	default:
+		close(s.done)
+	}
 }
 
 func (s *SSEWriter) IsClosed() bool {
-	return false
+	select {
+	case <-s.done:
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *SSEWriter) Done() <-chan struct{} {
-	return nil
+	return s.done
 }

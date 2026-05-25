@@ -2,6 +2,7 @@ package token
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -86,6 +87,33 @@ func TestValidate_InvalidSignature(t *testing.T) {
 	_, err := v.Validate(tokenStr)
 	if err == nil {
 		t.Error("Validate() expected error for invalid signature")
+	}
+}
+
+func TestValidate_RejectsFutureTimestamp(t *testing.T) {
+	salt := "test-salt"
+	channel := "news"
+	group := "admin"
+	uuid := "u123"
+
+	ts := time.Now().Add(10 * time.Minute).Unix()
+	sign := calcSign(channel, group, uuid, ts, salt)
+	tokenStr := base64Encode("channel=%s&group=%s&uuid=%s&ts=%d&sign=%s", channel, group, uuid, ts, sign)
+
+	v := NewValidator(salt, 3600)
+	_, err := v.Validate(tokenStr)
+	if !errors.Is(err, ErrTokenNotYetValid) {
+		t.Fatalf("Validate() error = %v, want %v", err, ErrTokenNotYetValid)
+	}
+}
+
+func TestValidate_RejectsInvalidIdentityCharacters(t *testing.T) {
+	v := NewValidator("test-salt", 3600)
+	tokenStr := Generate("test-salt", "news:bad", "admin", "u1")
+
+	_, err := v.Validate(tokenStr)
+	if !errors.Is(err, ErrInvalidIdentity) {
+		t.Fatalf("Validate() error = %v, want %v", err, ErrInvalidIdentity)
 	}
 }
 

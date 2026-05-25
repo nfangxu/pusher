@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -9,13 +10,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"pusher/internal/config"
 	"pusher/internal/handler"
 	"pusher/internal/log"
 	"pusher/internal/push"
 	"pusher/internal/registry"
 	"pusher/internal/token"
+
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
@@ -60,7 +62,7 @@ func main() {
 
 	go func() {
 		log.Infof("server listening on %s", addr)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("listen error: %v", err)
 		}
 	}()

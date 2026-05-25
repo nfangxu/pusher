@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -10,6 +11,7 @@ import (
 	"pusher/internal/log"
 	"pusher/internal/registry"
 	"pusher/internal/token"
+	"pusher/internal/transport"
 )
 
 var upgrader = websocket.Upgrader{
@@ -21,12 +23,18 @@ var upgrader = websocket.Upgrader{
 }
 
 type WsConn struct {
-	conn *websocket.Conn
-	done chan struct{}
+	conn    *websocket.Conn
+	done    chan struct{}
+	writeMu sync.Mutex
 }
 
 func (c *WsConn) Write(data []byte) (int, error) {
-	return len(data), c.conn.WriteMessage(websocket.TextMessage, data)
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	if err := c.conn.WriteMessage(websocket.TextMessage, data); err != nil {
+		return 0, err
+	}
+	return len(data), nil
 }
 
 func (c *WsConn) Close() {
@@ -110,9 +118,8 @@ func (h *WsHandler) Connect(c *gin.Context) {
 		Channel:   claims.Channel,
 		Group:     claims.Group,
 		UUID:      claims.UUID,
-		Protocol:  "ws",
+		Protocol:  transport.ProtocolWS,
 		Conn:      wsConn,
-		Done:      make(chan struct{}),
 		CreatedAt: time.Now(),
 	}
 
@@ -159,7 +166,10 @@ func (h *WsHandler) writePump(wsConn *WsConn) {
 		case <-wsConn.done:
 			return
 		case <-ticker.C:
-			if err := wsConn.conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(5*time.Second)); err != nil {
+			wsConn.writeMu.Lock()
+			err := wsConn.conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(5*time.Second))
+			wsConn.writeMu.Unlock()
+			if err != nil {
 				wsConn.Close()
 				return
 			}

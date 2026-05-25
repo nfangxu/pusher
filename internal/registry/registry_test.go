@@ -1,9 +1,37 @@
 package registry
 
 import (
-	"net/http/httptest"
 	"testing"
 )
+
+type mockConnWriter struct {
+	done chan struct{}
+}
+
+func (m *mockConnWriter) Write([]byte) (int, error) {
+	return 0, nil
+}
+
+func (m *mockConnWriter) Close() {
+	select {
+	case <-m.done:
+	default:
+		close(m.done)
+	}
+}
+
+func (m *mockConnWriter) IsClosed() bool {
+	select {
+	case <-m.done:
+		return true
+	default:
+		return false
+	}
+}
+
+func (m *mockConnWriter) Done() <-chan struct{} {
+	return m.done
+}
 
 func newTestConnection(channel, group, uuid string) *Connection {
 	return &Connection{
@@ -11,8 +39,7 @@ func newTestConnection(channel, group, uuid string) *Connection {
 		Channel: channel,
 		Group:   group,
 		UUID:    uuid,
-		Conn:    httptest.NewRecorder(),
-		Done:    make(chan struct{}),
+		Conn:    &mockConnWriter{done: make(chan struct{})},
 	}
 }
 

@@ -1,7 +1,8 @@
 package token
 
 import (
-	"crypto/md5"
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 	"net/url"
@@ -12,11 +13,13 @@ import (
 
 var (
 	ErrTokenExpired       = fmt.Errorf("token expired")
+	ErrTokenNotYetValid   = fmt.Errorf("token not yet valid")
 	ErrInvalidSignature   = fmt.Errorf("invalid signature")
 	ErrMissingFields      = fmt.Errorf("missing required fields")
 	ErrInvalidBase64      = fmt.Errorf("invalid base64")
 	ErrInvalidQueryFormat = fmt.Errorf("invalid query format")
 	ErrInvalidTimestamp   = fmt.Errorf("invalid timestamp")
+	ErrInvalidIdentity    = fmt.Errorf("invalid identity")
 )
 
 type Claims struct {
@@ -72,13 +75,20 @@ func (v *Validator) Validate(token string) (*Claims, error) {
 		return nil, ErrInvalidTimestamp
 	}
 
+	if !validIdentityPart(channel) || !validIdentityPart(group) || !validIdentityPart(uuid) {
+		return nil, ErrInvalidIdentity
+	}
+
 	now := time.Now().Unix()
+	if ts-now > 60 {
+		return nil, ErrTokenNotYetValid
+	}
 	if now-ts > v.expireSeconds {
 		return nil, ErrTokenExpired
 	}
 
 	expectedSign := calcSign(channel, group, uuid, ts, v.salt)
-	if sign != expectedSign {
+	if !hmac.Equal([]byte(sign), []byte(expectedSign)) {
 		return nil, ErrInvalidSignature
 	}
 
@@ -91,9 +101,23 @@ func (v *Validator) Validate(token string) (*Claims, error) {
 }
 
 func calcSign(channel, group, uuid string, ts int64, salt string) string {
-	data := fmt.Sprintf("%s%s%s%d%s", channel, group, uuid, ts, salt)
-	hash := md5.Sum([]byte(data))
-	return fmt.Sprintf("%x", hash)
+	data := fmt.Sprintf("%s%s%s%d", channel, group, uuid, ts)
+	mac := hmac.New(sha256.New, []byte(salt))
+	mac.Write([]byte(data))
+	return fmt.Sprintf("%x", mac.Sum(nil))
+}
+
+func validIdentityPart(s string) bool {
+	if s == "" || len(s) > 128 {
+		return false
+	}
+	for _, r := range s {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' || r == '-' || r == '.' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func (c *Claims) UserKey() string {

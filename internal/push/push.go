@@ -9,6 +9,7 @@ import (
 
 	"pusher/internal/log"
 	"pusher/internal/registry"
+	"pusher/internal/transport"
 )
 
 type PushTask struct {
@@ -136,26 +137,7 @@ func (q *PushQueue) sendBatch(conns []*registry.Connection, compactMsg []byte) {
 			continue
 		}
 
-		buf.Reset()
-
-		if conn.Protocol == "sse" {
-			buf.WriteString("event: message\ndata: {\"channel\":\"")
-		} else {
-			buf.WriteString("{\"channel\":\"")
-		}
-		buf.WriteString(conn.Channel)
-		buf.WriteString("\",\"group\":\"")
-		buf.WriteString(conn.Group)
-		buf.WriteString("\",\"uuid\":\"")
-		buf.WriteString(conn.UUID)
-		buf.WriteString("\",\"message\":")
-		buf.Write(compactMsg)
-		if conn.Protocol == "sse" {
-			buf.WriteString("}\n\n")
-		} else {
-			buf.WriteString("}")
-		}
-
+		formatMessage(&buf, conn, compactMsg)
 		q.writeToConn(conn, buf.Bytes())
 	}
 }
@@ -174,8 +156,21 @@ func (q *PushQueue) writeToConn(conn *registry.Connection, data []byte) {
 		}
 	}()
 
-	conn.Conn.Write(data)
-	if conn.Protocol == "sse" {
+	n, err := conn.Conn.Write(data)
+	if err != nil {
+		log.Errorw("推送写入失败",
+			"channel", conn.Channel,
+			"group", conn.Group,
+			"uuid", conn.UUID,
+			"protocol", conn.Protocol,
+			"bytes", n,
+			"error", err.Error(),
+		)
+		conn.Close()
+		q.registry.Unregister(conn.UserKey)
+		return
+	}
+	if conn.Protocol == transport.ProtocolSSE {
 		if f, ok := conn.Conn.(interface{ Flush() }); ok {
 			f.Flush()
 		}
@@ -235,34 +230,13 @@ func (q *PushQueue) send(conn *registry.Connection, message json.RawMessage) {
 		}
 	}()
 
-	var data []byte
-	if conn.Protocol == "sse" {
-		data = q.formatSSE(conn, message)
-	} else {
-		data = q.formatWS(conn, message)
-	}
-
-	if data != nil {
-		q.writeToConn(conn, data)
-	}
-}
-
-func (q *PushQueue) formatSSE(conn *registry.Connection, message json.RawMessage) []byte {
 	var msgBuf bytes.Buffer
 	if err := json.Compact(&msgBuf, message); err != nil {
 		log.Errorw("消息压缩失败", "error", err.Error())
-		return nil
+		return
 	}
-	return []byte(fmt.Sprintf("event: message\ndata: {\"channel\":\"%s\",\"group\":\"%s\",\"uuid\":\"%s\",\"message\":%s}\n\n",
-		conn.Channel, conn.Group, conn.UUID, msgBuf.String()))
-}
 
-func (q *PushQueue) formatWS(conn *registry.Connection, message json.RawMessage) []byte {
-	var msgBuf bytes.Buffer
-	if err := json.Compact(&msgBuf, message); err != nil {
-		log.Errorw("消息压缩失败", "error", err.Error())
-		return nil
-	}
-	return []byte(fmt.Sprintf("{\"channel\":\"%s\",\"group\":\"%s\",\"uuid\":\"%s\",\"message\":%s}",
-		conn.Channel, conn.Group, conn.UUID, msgBuf.String()))
+	var data bytes.Buffer
+	formatMessage(&data, conn, msgBuf.Bytes())
+	q.writeToConn(conn, data.Bytes())
 }

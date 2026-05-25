@@ -8,6 +8,7 @@ import (
 	"pusher/internal/log"
 	"pusher/internal/registry"
 	"pusher/internal/token"
+	"pusher/internal/transport"
 
 	"github.com/gin-gonic/gin"
 )
@@ -64,8 +65,8 @@ func (h *SSEHandler) Connect(c *gin.Context) {
 		Channel:   claims.Channel,
 		Group:     claims.Group,
 		UUID:      claims.UUID,
+		Protocol:  transport.ProtocolSSE,
 		Conn:      NewSSEWriter(c.Writer),
-		Done:      make(chan struct{}),
 		CreatedAt: time.Now(),
 	}
 
@@ -94,7 +95,7 @@ func (h *SSEHandler) heartbeat(conn *registry.Connection, beat chan<- struct{}) 
 
 	for {
 		select {
-		case <-conn.Done:
+		case <-conn.Conn.Done():
 			return
 		case <-ticker.C:
 			ok := h.safeHeartbeat(conn)
@@ -144,7 +145,7 @@ func (h *SSEHandler) waitForDisconnect(c *gin.Context, conn *registry.Connection
 		case <-clientGone:
 			h.disconnect(conn)
 			return
-		case <-conn.Done:
+		case <-conn.Conn.Done():
 			h.disconnect(conn)
 			return
 		case <-beat:
