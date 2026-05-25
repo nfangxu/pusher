@@ -84,12 +84,10 @@ func (h *SSEHandler) Connect(c *gin.Context) {
 
 	c.Writer.Flush()
 
-	go h.heartbeat(conn)
-
 	h.waitForDisconnect(c, conn)
 }
 
-func (h *SSEHandler) heartbeat(conn *registry.Connection) {
+func (h *SSEHandler) heartbeat(conn *registry.Connection, beat chan<- struct{}) {
 	ticker := time.NewTicker(time.Duration(h.heartbeatInterval) * time.Second)
 	defer ticker.Stop()
 
@@ -101,12 +99,19 @@ func (h *SSEHandler) heartbeat(conn *registry.Connection) {
 			conn.Conn.(http.Flusher).Flush()
 			fmt.Fprintf(conn.Conn, ":heartbeat\n\n")
 			conn.Conn.(http.Flusher).Flush()
+			select {
+			case beat <- struct{}{}:
+			default:
+			}
 		}
 	}
 }
 
 func (h *SSEHandler) waitForDisconnect(c *gin.Context, conn *registry.Connection) {
 	clientGone := c.Request.Context().Done()
+
+	beat := make(chan struct{}, 1)
+	go h.heartbeat(conn, beat)
 
 	timeout := time.NewTimer(time.Duration(h.readTimeout) * time.Second)
 	defer timeout.Stop()
@@ -119,6 +124,15 @@ func (h *SSEHandler) waitForDisconnect(c *gin.Context, conn *registry.Connection
 		case <-conn.Done:
 			h.disconnect(conn)
 			return
+		case <-beat:
+			// 收到心跳，重置超时定时器
+			if !timeout.Stop() {
+				select {
+				case <-timeout.C:
+				default:
+				}
+			}
+			timeout.Reset(time.Duration(h.readTimeout) * time.Second)
 		case <-timeout.C:
 			h.disconnect(conn)
 			return
