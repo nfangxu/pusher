@@ -225,17 +225,34 @@ func (q *PushQueue) send(conn *registry.Connection, message json.RawMessage) {
 		}
 	}()
 
-	var buf bytes.Buffer
-	if err := json.Compact(&buf, message); err != nil {
+	var data []byte
+	if conn.Protocol == "sse" {
+		data = q.formatSSE(conn, message)
+	} else {
+		data = q.formatWS(conn, message)
+	}
+
+	if data != nil {
+		q.writeToConn(conn, data)
+	}
+}
+
+func (q *PushQueue) formatSSE(conn *registry.Connection, message json.RawMessage) []byte {
+	var msgBuf bytes.Buffer
+	if err := json.Compact(&msgBuf, message); err != nil {
 		log.Errorw("消息压缩失败", "error", err.Error())
-		return
+		return nil
 	}
+	return []byte(fmt.Sprintf("event: message\ndata: {\"channel\":\"%s\",\"group\":\"%s\",\"uuid\":\"%s\",\"message\":%s}\n\n",
+		conn.Channel, conn.Group, conn.UUID, msgBuf.String()))
+}
 
-	data := fmt.Sprintf("event: message\ndata: {\"channel\":\"%s\",\"group\":\"%s\",\"uuid\":\"%s\",\"message\":%s}\n\n",
-		conn.Channel, conn.Group, conn.UUID, buf.String())
-
-	conn.Conn.Write([]byte(data))
-	if f, ok := conn.Conn.(interface{ Flush() }); ok {
-		f.Flush()
+func (q *PushQueue) formatWS(conn *registry.Connection, message json.RawMessage) []byte {
+	var msgBuf bytes.Buffer
+	if err := json.Compact(&msgBuf, message); err != nil {
+		log.Errorw("消息压缩失败", "error", err.Error())
+		return nil
 	}
+	return []byte(fmt.Sprintf("{\"channel\":\"%s\",\"group\":\"%s\",\"uuid\":\"%s\",\"message\":%s}",
+		conn.Channel, conn.Group, conn.UUID, msgBuf.String()))
 }
