@@ -1,6 +1,7 @@
 package push
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -115,8 +116,15 @@ func (q *PushQueue) matchTarget(target string) []*registry.Connection {
 }
 
 func (q *PushQueue) send(conn *registry.Connection, message json.RawMessage) {
+	// 压缩 message，移除换行和多余空白，避免破坏 SSE 格式
+	var buf bytes.Buffer
+	if err := json.Compact(&buf, message); err != nil {
+		log.Errorw("消息压缩失败", "error", err.Error())
+		return
+	}
+
 	data := fmt.Sprintf("event: message\ndata: {\"channel\":\"%s\",\"group\":\"%s\",\"uuid\":\"%s\",\"message\":%s}\n\n",
-		conn.Channel, conn.Group, conn.UUID, string(message))
+		conn.Channel, conn.Group, conn.UUID, buf.String())
 
 	conn.Conn.Write([]byte(data))
 	if f, ok := conn.Conn.(interface{ Flush() }); ok {
