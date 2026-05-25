@@ -20,6 +20,10 @@ func (s *SSEWriter) Write(data []byte) (int, error) {
 	return s.w.Write(data)
 }
 
+func (s *SSEWriter) Flush() {
+	s.f.Flush()
+}
+
 func (s *SSEWriter) Close() {
 	// SSE 连接不通过此处关闭，由 waitForDisconnect 管理
 }

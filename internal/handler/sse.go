@@ -3,7 +3,6 @@ package handler
 import (
 	"errors"
 	"fmt"
-	"net/http"
 	"time"
 
 	"pusher/internal/log"
@@ -125,9 +124,9 @@ func (h *SSEHandler) safeHeartbeat(conn *registry.Connection) (ok bool) {
 		}
 	}()
 
-	conn.Conn.(http.Flusher).Flush()
+	conn.Conn.(interface{ Flush() }).Flush()
 	fmt.Fprintf(conn.Conn, ":heartbeat\n\n")
-	conn.Conn.(http.Flusher).Flush()
+	conn.Conn.(interface{ Flush() }).Flush()
 	return true
 }
 
