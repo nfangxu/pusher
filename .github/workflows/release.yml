@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            LOG=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s (%h)")
+          else
+            LOG=$(git log --pretty=format:"- %s (%h)")
+          fi
+          {
+            echo "body<<EOF"
+            echo "## 更新日志"
+            echo ""
+            echo "$LOG"
+            echo ""
+            echo "## 部署说明"
+            echo ""
+            echo "1. 解压: \`tar xzf pusher-${GITHUB_REF_NAME}-linux-amd64.tar.gz\`"
+            echo "2. 修改配置: \`vim pusher-${GITHUB_REF_NAME}/config.yaml\`（至少修改 \`token.salt\` 和 \`push.token\`）"
+            echo "3. 启动服务: \`cd pusher-${GITHUB_REF_NAME} && ./server\`"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o server ./cmd/server/
+
+      - name: Package
+        run: |
+          PKG_DIR="pusher-${GITHUB_REF_NAME}"
+          mkdir -p "${PKG_DIR}"
+          cp server "${PKG_DIR}/"
+          cp config.yaml "${PKG_DIR}/"
+          cp -r docs "${PKG_DIR}/"
+          cp -r examples "${PKG_DIR}/"
+          tar czf "pusher-${GITHUB_REF_NAME}-linux-amd64.tar.gz" "${PKG_DIR}"
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          body: ${{ steps.changelog.outputs.body }}
+          files: pusher-${{ github.ref_name }}-linux-amd64.tar.gz
