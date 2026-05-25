@@ -194,7 +194,7 @@ sudo journalctl -u pusher -f
    net.ipv4.tcp_tw_reuse = 1
    ```
 4. **CORS**：生产环境将 `cors_origins` 设置为具体域名，不要使用 `*`
-5. **反向代理**：如果使用 Nginx，需要关闭 SSE 响应的缓冲：
+5. **反向代理**：如果使用 Nginx，需要关闭 SSE 响应的缓冲，并配置 WebSocket 支持：
    ```nginx
    location /sse/ {
        proxy_pass http://pusher_backend;
@@ -203,6 +203,14 @@ sudo journalctl -u pusher -f
        proxy_buffering off;
        proxy_cache off;
        chunked_transfer_encoding off;
+   }
+
+   location /ws/ {
+       proxy_pass http://pusher_backend;
+       proxy_http_version 1.1;
+       proxy_set_header Upgrade $http_upgrade;
+       proxy_set_header Connection "Upgrade";
+       proxy_read_timeout 86400;
    }
    ```
 

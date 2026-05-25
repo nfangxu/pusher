@@ -56,7 +56,7 @@ es.onerror = (err) => {
 
 ## 消息格式
 
-服务端推送的消息格式为 SSE 标准格式：
+### SSE 消息格式
 
 ```
 event: message
@@ -71,6 +71,71 @@ data: {"channel":"news","group":"admin","uuid":"u1","message":{"type":"alert","c
 | `group` | 用户分组 | `"admin"` |
 | `uuid` | 用户唯一标识 | `"u1"` |
 | `message` | 后端推送的原始消息体 | `{"type":"alert","content":"hello"}` |
+
+### WebSocket 消息格式
+
+WebSocket 直接接收 JSON，无 SSE 帧包装：
+
+```json
+{"channel":"news","group":"admin","uuid":"u1","message":{"type":"alert","content":"hello"}}
+```
+
+字段含义与 SSE 相同。
+
+---
+
+## WebSocket 连接
+
+WebSocket 是 SSE 的替代方案，连接方式类似：
+
+```javascript
+// 1. 从你的后端获取 Token
+const token = await fetch('/api/sse-token').then(r => r.text());
+
+// 2. 建立 WebSocket 连接
+const ws = new WebSocket(`ws://your-push-server:8080/ws/connect?token=${token}`);
+
+ws.onopen = () => {
+    console.log('WebSocket 连接已建立');
+};
+
+ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    console.log('收到推送:', data);
+    // data 结构: { channel, group, uuid, message }
+};
+
+ws.onerror = (err) => {
+    console.error('WebSocket 连接错误', err);
+};
+
+ws.onclose = () => {
+    console.log('WebSocket 连接断开');
+    // 可在此处实现重连逻辑
+};
+```
+
+### 与 SSE 的对比
+
+| 特性 | SSE | WebSocket |
+|------|-----|-----------|
+| 协议 | HTTP/1.1 | TCP |
+| 单向/双向 | 单向（服务端推） | 双向 |
+| 自动重连 | 内置 | 需自行实现 |
+| 浏览器支持 | 几乎全部 | 几乎全部 |
+| 数据格式 | SSE 帧包裹 | 原始 JSON |
+
+### 重连示例
+
+```javascript
+function connect() {
+    const ws = new WebSocket(`ws://localhost:8080/ws/connect?token=${token}`);
+
+    ws.onclose = () => {
+        setTimeout(connect, 1000); // 重连
+    };
+}
+```
 
 ---
 
