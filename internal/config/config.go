@@ -68,10 +68,10 @@ func (c *Config) validate() error {
 	if c.App.Port == 0 {
 		return fmt.Errorf("app.port is required")
 	}
-	if c.Token.Salt == "" || c.Token.Salt == "your-secret-salt-here" {
+	if c.Token.Salt == "" {
 		return fmt.Errorf("token.salt must be set to a real value")
 	}
-	if c.Push.Token == "" || c.Push.Token == "your-push-token-here" {
+	if c.Push.Token == "" {
 		return fmt.Errorf("push.token must be set to a real value")
 	}
 	return nil

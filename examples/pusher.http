@@ -1,0 +1,18 @@
+@host = http://localhost:8080
+@token = your-push-token-here
+
+### Health Check
+GET {{host}}/health
+
+### Push Message
+POST {{host}}/push
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "targets": ["news:*"],
+  "message": {
+    "type": "alert",
+    "content": "hello"
+  }
+}
