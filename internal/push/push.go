@@ -129,7 +129,6 @@ func (q *PushQueue) fanOut(conns []*registry.Connection, message json.RawMessage
 
 func (q *PushQueue) sendBatch(conns []*registry.Connection, compactMsg []byte) {
 	var buf bytes.Buffer
-	buf.Grow(len(compactMsg) + 200)
 
 	for _, conn := range conns {
 		if conn.IsClosed() {
@@ -138,7 +137,12 @@ func (q *PushQueue) sendBatch(conns []*registry.Connection, compactMsg []byte) {
 		}
 
 		buf.Reset()
-		buf.WriteString("event: message\ndata: {\"channel\":\"")
+
+		if conn.Protocol == "sse" {
+			buf.WriteString("event: message\ndata: {\"channel\":\"")
+		} else {
+			buf.WriteString("{\"channel\":\"")
+		}
 		buf.WriteString(conn.Channel)
 		buf.WriteString("\",\"group\":\"")
 		buf.WriteString(conn.Group)
@@ -146,7 +150,11 @@ func (q *PushQueue) sendBatch(conns []*registry.Connection, compactMsg []byte) {
 		buf.WriteString(conn.UUID)
 		buf.WriteString("\",\"message\":")
 		buf.Write(compactMsg)
-		buf.WriteString("}\n\n")
+		if conn.Protocol == "sse" {
+			buf.WriteString("}\n\n")
+		} else {
+			buf.WriteString("}")
+		}
 
 		q.writeToConn(conn, buf.Bytes())
 	}
@@ -167,8 +175,10 @@ func (q *PushQueue) writeToConn(conn *registry.Connection, data []byte) {
 	}()
 
 	conn.Conn.Write(data)
-	if f, ok := conn.Conn.(interface{ Flush() }); ok {
-		f.Flush()
+	if conn.Protocol == "sse" {
+		if f, ok := conn.Conn.(interface{ Flush() }); ok {
+			f.Flush()
+		}
 	}
 }
 
