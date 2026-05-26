@@ -14,19 +14,21 @@ log:
   level: "debug"
   path: "/tmp/test.log"
   max_days: 3
+registry:
+  shard_num: 16
 sse:
   heartbeat_interval: 15
   read_timeout: 30
   cors_origins: "http://localhost:3000"
-  worker_num: 4
-  push_queue_capacity: 5000
-  shard_num: 16
 token:
   salt: "test-salt"
   expire_seconds: 1800
 push:
   token: "test-push-token"
   rate_limit: 50
+  worker_num: 4
+  queue_capacity: 5000
+  fan_out_workers: 100
 `
 	tmpFile, err := os.CreateTemp("", "config-*.yaml")
 	if err != nil {
@@ -53,6 +55,9 @@ push:
 	if cfg.Log.Level != "debug" {
 		t.Errorf("Log.Level = %v, want debug", cfg.Log.Level)
 	}
+	if cfg.Registry.ShardNum != 16 {
+		t.Errorf("Registry.ShardNum = %v, want 16", cfg.Registry.ShardNum)
+	}
 	if cfg.SSE.HeartbeatInterval != 15 {
 		t.Errorf("SSE.HeartbeatInterval = %v, want 15", cfg.SSE.HeartbeatInterval)
 	}
@@ -61,6 +66,15 @@ push:
 	}
 	if cfg.Push.Token != "test-push-token" {
 		t.Errorf("Push.Token = %v, want test-push-token", cfg.Push.Token)
+	}
+	if cfg.Push.WorkerNum != 4 {
+		t.Errorf("Push.WorkerNum = %v, want 4", cfg.Push.WorkerNum)
+	}
+	if cfg.Push.QueueCapacity != 5000 {
+		t.Errorf("Push.QueueCapacity = %v, want 5000", cfg.Push.QueueCapacity)
+	}
+	if cfg.Push.FanOutWorkers != 100 {
+		t.Errorf("Push.FanOutWorkers = %v, want 100", cfg.Push.FanOutWorkers)
 	}
 }
 

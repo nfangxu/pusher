@@ -2,7 +2,7 @@
 
 **测试时间：** 2026-05-25
 **测试环境：** macOS (Darwin 24.6.0), Apple Silicon
-**服务配置：** 默认配置 (worker_num=8, shard_num=32, fan_out_workers=200, rate_limit=100 QPS)
+**服务配置：** 默认配置 (push.worker_num=8, registry.shard_num=32, push.fan_out_workers=200, push.rate_limit=100 QPS)
 **业务场景：** 低推送量、高连接数
 
 ---

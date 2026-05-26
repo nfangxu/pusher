@@ -85,9 +85,13 @@ SSE 通过 `SSEWriter`（封装 `http.ResponseWriter` + Flush）实现，WS 通�
 - `token.expire_seconds` — 连接 token 有效期
 - `push.token` — `/push` API Bearer 鉴权 token（仅校验非空）
 - `push.rate_limit` — 推送接口全局限流（`golang.org/x/time/rate`）
-- `sse.worker_num` — 推送队列消费 worker 数
-- `sse.shard_num` — 注册表 shard 数
-- `sse.fan_out_workers` — 大规模 fan-out 并发 worker 数，默认 200
+- `push.worker_num` — 推送队列消费 worker 数
+- `push.queue_capacity` — 推送队列容量
+- `push.fan_out_workers` — 大规模 fan-out 并发 worker 数，默认 200
+- `registry.shard_num` — 注册表 shard 数
+- `sse.heartbeat_interval` — SSE 心跳间隔（秒）
+- `sse.read_timeout` — SSE 心跳超时时间（秒）
+- `sse.cors_origins` — CORS 允许的来源
 
 ## 测试
 

@@ -160,8 +160,8 @@ GET /health
 ### 推送返回 2002？
 
 推送队列已满，可能是推送速率过高或 worker 处理不过来。解决方案：
-- 增大 `sse.push_queue_capacity`
-- 增大 `sse.worker_num`
+- 增大 `push.queue_capacity`
+- 增大 `push.worker_num`
 - 降低推送频率
 
 ### 推送返回 2003？

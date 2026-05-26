@@ -50,14 +50,13 @@ log:
   path: "logs/pusher.log" # 日志文件路径
   max_days: 7             # 日志保留天数
 
+registry:
+  shard_num: 32           # 连接注册表分片数
+
 sse:
   heartbeat_interval: 30  # SSE 心跳间隔（秒），WebSocket ping 也使用 30 秒固定间隔
   read_timeout: 60        # SSE 心跳超时时间（秒），超过后主动断开
   cors_origins: "*"       # CORS 允许的来源，多个用逗号分隔
-  worker_num: 8           # 推送队列消费 goroutine 数量
-  push_queue_capacity: 10000  # 推送队列容量
-  shard_num: 32           # 连接注册表分片数
-  fan_out_workers: 200    # 并发 fan-out goroutine 数
 
 token:
   salt: "dev-secret-salt-change-before-production"  # Token HMAC 签名密钥，代码仅校验非空
@@ -66,18 +65,20 @@ token:
 push:
   token: "dev-push-token-change-before-production"  # 推送接口认证 Token，代码仅校验非空
   rate_limit: 100                                   # 推送接口限流（每秒请求数）
+  worker_num: 8                                     # 推送队列消费 goroutine 数量
+  queue_capacity: 10000                             # 推送队列容量
+  fan_out_workers: 200                              # 并发 fan-out goroutine 数
 ```
 
 ### 关键配置项说明
 
 | 配置项 | 说明 | 建议值 |
 |--------|------|--------|
+| `registry.shard_num` | 注册表分片数，高并发时减少锁竞争 | CPU 核心数 * 4 |
 | `sse.heartbeat_interval` | 心跳间隔，影响连接存活检测精度 | 30 |
 | `sse.read_timeout` | SSE 心跳超时时间 | 60-300 |
-| `sse.worker_num` | 消费 goroutine 数，影响推送吞吐量 | CPU 核心数 * 2 |
-| `sse.push_queue_capacity` | 队列容量，满时新推送返回 2002 | 10000-100000 |
-| `sse.shard_num` | 分片数，高并发时减少锁竞争 | CPU 核心数 * 4 |
-| `sse.fan_out_workers` | 并发 fan-out goroutine 数，大量连接时降低推送延迟 | 200 |
+| `push.queue_capacity` | 队列容量，满时新推送返回 2002 | 10000-100000 |
+| `push.fan_out_workers` | 并发 fan-out goroutine 数，大量连接时降低推送延迟 | 100-500 |
 | `token.expire_seconds` | Token 有效期，过期后客户端需重新获取 | 3600 |
 | `push.rate_limit` | 推送 QPS 上限，防止单点打满 | 按业务需求设置 |
 
@@ -223,16 +224,16 @@ sudo journalctl -u pusher -f
 | 参数 | 说明 | 调优建议 |
 |------|------|----------|
 | 系统 `nofile` | 文件描述符上限 | 100 万连接需要至少 1048576 |
-| `sse.shard_num` | 注册表分片数 | CPU 核心数 * 4，分片越多锁竞争越少 |
+| `registry.shard_num` | 注册表分片数 | CPU 核心数 * 4，分片越多锁竞争越少 |
 | `sse.heartbeat_interval` | 心跳间隔 | 不要太频繁，30 秒足够 |
 
 ### 推送性能相关
 
 | 参数 | 说明 | 调优建议 |
 |------|------|----------|
-| `sse.worker_num` | 消费 goroutine 数 | CPU 核心数 * 2 |
-| `sse.push_queue_capacity` | 队列容量 | 根据业务峰值设置，10000-100000 |
-| `sse.fan_out_workers` | 并发 fan-out goroutine 数 | 连接数多时增大，建议 100-500 |
+| `push.worker_num` | 消费 goroutine 数 | CPU 核心数 * 2 |
+| `push.queue_capacity` | 队列容量 | 根据业务峰值设置，10000-100000 |
+| `push.fan_out_workers` | 并发 fan-out goroutine 数 | 连接数多时增大，建议 100-500 |
 | `push.rate_limit` | 推送 QPS 上限 | 根据业务需求和服务器能力设置 |
 
 > **Fan-out 说明：** 全量广播时，连接数 ≤100 走顺序发送，>100 走并发 fan-out。`fan_out_workers` 控制并发度。详见 [Fan-out 分析报告](fan-out-report.md)。

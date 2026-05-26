@@ -7,14 +7,13 @@ log:
   path: "logs/pusher.log"
   max_days: 7
 
+registry:
+  shard_num: 32
+
 sse:
   heartbeat_interval: 30
   read_timeout: 60
   cors_origins: "*"
-  worker_num: 8
-  push_queue_capacity: 10000
-  shard_num: 32
-  fan_out_workers: 200
 
 token:
   salt: "dev-secret-salt-change-before-production"
@@ -23,3 +22,6 @@ token:
 push:
   token: "dev-push-token-change-before-production"
   rate_limit: 100
+  worker_num: 8
+  queue_capacity: 10000
+  fan_out_workers: 200

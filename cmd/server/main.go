@@ -35,9 +35,9 @@ func main() {
 
 	log.Info("server starting...")
 
-	reg := registry.New(cfg.SSE.ShardNum)
+	reg := registry.New(cfg.Registry.ShardNum)
 	validator := token.NewValidator(cfg.Token.Salt, cfg.Token.ExpireSeconds)
-	pushQueue := push.New(reg, cfg.SSE.PushQueueCapacity, cfg.SSE.WorkerNum, cfg.SSE.FanOutWorkers)
+	pushQueue := push.New(reg, cfg.Push.QueueCapacity, cfg.Push.WorkerNum, cfg.Push.FanOutWorkers)
 	pushQueue.Start()
 
 	sseHandler := handler.NewSSEHandler(reg, validator, cfg.SSE.HeartbeatInterval, cfg.SSE.ReadTimeout)

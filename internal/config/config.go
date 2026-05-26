@@ -8,11 +8,12 @@ import (
 )
 
 type Config struct {
-	App   AppConfig   `yaml:"app"`
-	Log   LogConfig   `yaml:"log"`
-	SSE   SSEConfig   `yaml:"sse"`
-	Token TokenConfig `yaml:"token"`
-	Push  PushConfig  `yaml:"push"`
+	App      AppConfig      `yaml:"app"`
+	Log      LogConfig      `yaml:"log"`
+	Registry RegistryConfig `yaml:"registry"`
+	SSE      SSEConfig      `yaml:"sse"`
+	Token    TokenConfig    `yaml:"token"`
+	Push     PushConfig     `yaml:"push"`
 }
 
 type AppConfig struct {
@@ -26,24 +27,27 @@ type LogConfig struct {
 	MaxDays int    `yaml:"max_days"`
 }
 
+type RegistryConfig struct {
+	ShardNum int `yaml:"shard_num"`
+}
+
 type SSEConfig struct {
 	HeartbeatInterval int    `yaml:"heartbeat_interval"`
 	ReadTimeout       int    `yaml:"read_timeout"`
 	CORSOrigins       string `yaml:"cors_origins"`
-	WorkerNum         int    `yaml:"worker_num"`
-	PushQueueCapacity int    `yaml:"push_queue_capacity"`
-	ShardNum          int    `yaml:"shard_num"`
-	FanOutWorkers     int    `yaml:"fan_out_workers"`
+}
+
+type PushConfig struct {
+	Token         string `yaml:"token"`
+	RateLimit     int    `yaml:"rate_limit"`
+	WorkerNum     int    `yaml:"worker_num"`
+	QueueCapacity int    `yaml:"queue_capacity"`
+	FanOutWorkers int    `yaml:"fan_out_workers"`
 }
 
 type TokenConfig struct {
 	Salt          string `yaml:"salt"`
 	ExpireSeconds int    `yaml:"expire_seconds"`
-}
-
-type PushConfig struct {
-	Token     string `yaml:"token"`
-	RateLimit int    `yaml:"rate_limit"`
 }
 
 func Load(path string) (*Config, error) {
@@ -91,6 +95,9 @@ func (c *Config) setDefaults() {
 	if c.Log.MaxDays == 0 {
 		c.Log.MaxDays = 7
 	}
+	if c.Registry.ShardNum == 0 {
+		c.Registry.ShardNum = 32
+	}
 	if c.SSE.HeartbeatInterval == 0 {
 		c.SSE.HeartbeatInterval = 30
 	}
@@ -100,22 +107,19 @@ func (c *Config) setDefaults() {
 	if c.SSE.CORSOrigins == "" {
 		c.SSE.CORSOrigins = "*"
 	}
-	if c.SSE.WorkerNum == 0 {
-		c.SSE.WorkerNum = 8
-	}
-	if c.SSE.PushQueueCapacity == 0 {
-		c.SSE.PushQueueCapacity = 10000
-	}
-	if c.SSE.ShardNum == 0 {
-		c.SSE.ShardNum = 32
-	}
-	if c.SSE.FanOutWorkers == 0 {
-		c.SSE.FanOutWorkers = 200
-	}
 	if c.Token.ExpireSeconds == 0 {
 		c.Token.ExpireSeconds = 3600
 	}
 	if c.Push.RateLimit == 0 {
 		c.Push.RateLimit = 100
+	}
+	if c.Push.WorkerNum == 0 {
+		c.Push.WorkerNum = 8
+	}
+	if c.Push.QueueCapacity == 0 {
+		c.Push.QueueCapacity = 10000
+	}
+	if c.Push.FanOutWorkers == 0 {
+		c.Push.FanOutWorkers = 200
 	}
 }
