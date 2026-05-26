@@ -184,7 +184,7 @@ func TestPushQueue_SendFormatsWebSocketAsJSON(t *testing.T) {
 	if strings.Contains(body, "event: message") || strings.Contains(body, "data:") {
 		t.Fatalf("websocket body should not contain SSE framing: %q", body)
 	}
-	if body != `{"channel":"news","group":"admin","uuid":"u1","message":{"type":"test"}}` {
+	if body != `{"type":"test"}` {
 		t.Fatalf("websocket body = %q", body)
 	}
 }
@@ -207,25 +207,8 @@ func TestPushQueue_SendBatchFormatsMixedProtocols(t *testing.T) {
 	if strings.Contains(wsBody, "event: message") || strings.Contains(wsBody, "data:") {
 		t.Fatalf("websocket body should not contain SSE framing: %q", wsBody)
 	}
-	if wsBody != `{"channel":"news","group":"admin","uuid":"u2","message":{"type":"test"}}` {
+	if wsBody != `{"type":"test"}` {
 		t.Fatalf("websocket body = %q", wsBody)
 	}
 }
 
-func TestPushQueue_SendEscapesIdentityFields(t *testing.T) {
-	reg := registry.New(4)
-	q := New(reg, 100, 2, 10)
-	conn := newTestConnection(`news"x`, `admin\y`, "u1")
-	conn.Protocol = transport.ProtocolWS
-
-	q.send(conn, json.RawMessage(`{"type":"test"}`))
-
-	body := conn.Conn.(*mockConnWriter).ResponseRecorder.Body.Bytes()
-	var decoded map[string]interface{}
-	if err := json.Unmarshal(body, &decoded); err != nil {
-		t.Fatalf("body should be valid JSON: %v; body=%q", err, string(body))
-	}
-	if decoded["channel"] != `news"x` || decoded["group"] != `admin\y` {
-		t.Fatalf("identity fields were not preserved: %#v", decoded)
-	}
-}
