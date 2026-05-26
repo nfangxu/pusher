@@ -35,8 +35,7 @@ const es = new EventSource(`http://your-push-server:8080/sse/connect?token=${tok
 es.addEventListener('message', (event) => {
     const data = JSON.parse(event.data);
     console.log('收到推送:', data);
-    // data 结构: { channel, group, uuid, message }
-    // message 是后端推送时传入的原始 JSON
+    // data 即后端推送时传入的原始 message JSON
 });
 
 // 4. 监听连接状态
@@ -58,27 +57,20 @@ es.onerror = (err) => {
 
 ```
 event: message
-data: {"channel":"news","group":"admin","uuid":"u1","message":{"type":"alert","content":"hello"}}
+data: {"type":"alert","content":"hello"}
 ```
 
-解析后各字段含义：
-
-| 字段 | 说明 | 示例 |
-|------|------|------|
-| `channel` | 业务频道 | `"news"` |
-| `group` | 用户分组 | `"admin"` |
-| `uuid` | 用户唯一标识 | `"u1"` |
-| `message` | 后端推送的原始消息体 | `{"type":"alert","content":"hello"}` |
+`data` 即后端推送时传入的原始 message JSON，服务端不做任何包装。
 
 ### WebSocket 消息格式
 
 WebSocket 直接接收 JSON，无 SSE 帧包装：
 
 ```json
-{"channel":"news","group":"admin","uuid":"u1","message":{"type":"alert","content":"hello"}}
+{"type":"alert","content":"hello"}
 ```
 
-字段含义与 SSE 相同。
+内容与 SSE 的 `data` 字段相同，即后端推送时传入的原始 message。
 
 ---
 
@@ -100,7 +92,7 @@ ws.onopen = () => {
 ws.onmessage = (event) => {
     const data = JSON.parse(event.data);
     console.log('收到推送:', data);
-    // data 结构: { channel, group, uuid, message }
+    // data 即后端推送时传入的原始 message JSON
 };
 
 ws.onerror = (err) => {

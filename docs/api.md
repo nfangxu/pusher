@@ -23,12 +23,12 @@ Cache-Control: no-cache
 Connection: keep-alive
 
 event: message
-data: {"channel":"news","group":"admin","uuid":"u1","message":{...}}
+data: {...}
 
 :heartbeat
 
 event: message
-data: {"channel":"news","group":"admin","uuid":"u1","message":{...}}
+data: {...}
 ```
 
 **失败响应：**
@@ -56,10 +56,10 @@ GET /ws/connect?token={token}
 
 **成功响应：**
 
-协议升级为 WebSocket，服务端推送纯 JSON 消息：
+协议升级为 WebSocket，服务端直接推送后端传入的 message 原始 JSON：
 
 ```json
-{"channel":"news","group":"admin","uuid":"u1","message":{...}}
+{...}
 ```
 
 服务端每 30 秒发送 WebSocket Ping 保持连接。

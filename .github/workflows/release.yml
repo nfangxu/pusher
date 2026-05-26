@@ -52,6 +52,7 @@ jobs:
           PKG_DIR="pusher-${GITHUB_REF_NAME}"
           mkdir -p "${PKG_DIR}"
           cp server "${PKG_DIR}/"
+          cp README.md "${PKG_DIR}/"
           cp config.yaml "${PKG_DIR}/"
           cp -r docs "${PKG_DIR}/"
           cp -r examples "${PKG_DIR}/"
